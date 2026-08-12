@@ -13,6 +13,10 @@
     {
       "url": "http://localhost:3000",
       "description": "Backend Server"
+    },
+    {
+      "url": "https://sales-report-backend-eight.vercel.app/",
+      "description": "Production Backend (Vercel)"
     }
   ],
   "paths": {
