@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { apiBase } from '../api/client.js';
 
 const mode = ref('manual');
 
@@ -37,7 +38,7 @@ const submitManual = async () => {
   
   isLoading.value = true;
   try {
-    const res = await fetch('/api/sales', {
+    const res = await fetch(`${apiBase}/sales`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -136,7 +137,7 @@ const processDataArray = async (dataArray) => {
   
   isLoading.value = true;
   try {
-    const res = await fetch('/api/sales/bulk', {
+    const res = await fetch(`${apiBase}/sales/bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
