@@ -1,0 +1,35 @@
+:root {
+  /* Warna monokrom hangat */
+  --canvas: #f7f6f3;
+  --surface: #ffffff;
+  --surface-alt: #f9f9f8;
+  --border: #eaeaea;
+  --ink: #2f3437;
+  --ink-strong: #111111;
+  --muted: #787774;
+  --faint: #b3b3ae;
+
+  /* Pastel untuk aksen semantik */
+  --pastel-red-bg: #fdebec;
+  --pastel-red: #9f2f2d;
+  --pastel-blue-bg: #e1f3fe;
+  --pastel-blue: #1f6c9f;
+  --pastel-green-bg: #edf3ec;
+  --pastel-green: #346538;
+  --pastel-yellow-bg: #fbf3db;
+  --pastel-yellow: #956400;
+
+  /* Tipografi */
+  --font-sans: 'SF Pro Display', 'Geist Sans', 'Helvetica Neue', 'Switzer', system-ui, sans-serif;
+  --font-serif: 'Lyon Text', 'Newsreader', 'Playfair Display', 'Instrument Serif', Georgia, serif;
+  --font-mono: 'Geist Mono', 'SF Mono', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* Geometri */
+  --radius: 8px;
+  --radius-sm: 4px;
+  --maxw: 1180px;
+  --pad-section: clamp(72px, 11vw, 128px);
+
+  /* Bayangan ultra-difus */
+  --shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.04);
+}

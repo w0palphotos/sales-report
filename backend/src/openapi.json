@@ -1,0 +1,154 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Sales Insight Report Builder API",
+    "version": "1.0.0",
+    "description": "API for Dynamic Sales Insight & Report Builder"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5173",
+      "description": "Vite Proxy Server (Default Frontend Port)"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Backend Server"
+    }
+  ],
+  "paths": {
+    "/api/meta/fields": {
+      "get": {
+        "summary": "Get available fields for reports",
+        "responses": {
+          "200": {
+            "description": "List of dimensions, measures, aggregations, and operators"
+          }
+        }
+      }
+    },
+    "/api/reports": {
+      "post": {
+        "summary": "Generate a dynamic report",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": { "type": "array", "items": { "type": "string" } },
+                  "columns": { "type": "array", "items": { "type": "string" } },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": { "type": "string" },
+                        "aggregation": { "type": "string" }
+                      }
+                    }
+                  },
+                  "filters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": { "type": "string" },
+                        "operator": { "type": "string" },
+                        "value": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "rows": ["sales_name"],
+                  "columns": ["city"],
+                  "values": [
+                    {
+                      "field": "amount",
+                      "aggregation": "sum"
+                    }
+                  ],
+                  "filters": []
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Generated report data" }
+        }
+      }
+    },
+    "/api/sales": {
+      "post": {
+        "summary": "Insert a single sales record manually",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "salesperson_name": { "type": "string" },
+                  "city_name": { "type": "string" },
+                  "product_name": { "type": "string" },
+                  "amount": { "type": "number" }
+                },
+                "required": ["salesperson_name", "city_name", "product_name", "amount"],
+                "example": {
+                  "salesperson_name": "Andi",
+                  "city_name": "Jakarta",
+                  "product_name": "Honda",
+                  "amount": 120000000
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Data successfully saved." },
+          "400": { "description": "Validation error." }
+        }
+      }
+    },
+    "/api/sales/bulk": {
+      "post": {
+        "summary": "Insert multiple sales records from JSON (usually parsed from CSV/XLSX)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "salesperson_name": { "type": "string" },
+                    "city_name": { "type": "string" },
+                    "product_name": { "type": "string" },
+                    "amount": { "type": "number" }
+                  },
+                  "required": ["salesperson_name", "city_name", "product_name", "amount"]
+                },
+                "example": [
+                  {"salesperson_name": "Andi", "city_name": "Jakarta", "product_name": "Honda", "amount": 120000000},
+                  {"salesperson_name": "Andi", "city_name": "Bandung", "product_name": "Yamaha", "amount": 90000000},
+                  {"salesperson_name": "Budi", "city_name": "Jakarta", "product_name": "Suzuki", "amount": 80000000},
+                  {"salesperson_name": "Budi", "city_name": "Surabaya", "product_name": "Honda", "amount": 95000000},
+                  {"salesperson_name": "Citra", "city_name": "Bandung", "product_name": "Suzuki", "amount": 70000000},
+                  {"salesperson_name": "Citra", "city_name": "Surabaya", "product_name": "Yamaha", "amount": 85000000},
+                  {"salesperson_name": "Andi", "city_name": "Jakarta", "product_name": "Yamaha", "amount": 75000000}
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Rows successfully saved." },
+          "400": { "description": "Validation error." }
+        }
+      }
+    }
+  }
+}
