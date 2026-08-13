@@ -80,6 +80,8 @@ Struktur repo:
 
 ## Desain Database
 
+Untuk detail lengkap mengenai relasi antar tabel beserta tipe datanya, silakan lihat **[Diagram Entity-Relationship (ERD)](docs/ER-Diagram.md)**.
+
 Skema _star schema_ sederhana:
 
 ```
@@ -197,10 +199,10 @@ Ringkasan Endpoint Utama:
 | POST | `/api/sales` | Tambah transaksi baru (manual entry) |
 | POST | `/api/sales/bulk` | Tambah banyak transaksi sekaligus dari JSON (untuk upload CSV/XLSX) |
 
-### Cara menggunakan Swagger OpenAPI
-1. Pastikan backend berjalan (`npm run dev:backend`).
-2. Buka browser dan arahkan ke `http://localhost:3000/api/docs`.
-3. Anda akan melihat antarmuka Swagger UI untuk mencoba langsung request ke backend.
+### Cara Mengakses Swagger OpenAPI
+1. Pastikan server backend sedang berjalan (jalankan `npm run dev:backend` di terminal).
+2. Buka browser dan kunjungi: **`http://localhost:3000/api/docs`** (local) atau **`https://sales-report-backend-eight.vercel.app/api/docs`**
+3. Anda dapat melihat seluruh endpoint yang tersedia beserta format request/response-nya, dan mengujinya langsung menggunakan tombol **"Try it out"**.
 
 ---
 

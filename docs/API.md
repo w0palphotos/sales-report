@@ -15,6 +15,19 @@ Kode status: `400` validasi, `404` tidak ditemukan, `500` kesalahan server.
 
 ---
 
+## Interactive API Docs (Swagger)
+
+Aplikasi ini menyediakan Swagger UI untuk mempermudah eksplorasi dan pengujian API secara interaktif.
+
+### Cara Mengakses Swagger
+1. Pastikan server backend sedang berjalan (jalankan `npm run dev:backend` di terminal).
+2. Buka browser dan kunjungi: **`http://localhost:3000/api/docs`** (local) atau **`https://sales-report-backend-eight.vercel.app/api/docs`**
+3. Anda dapat melihat seluruh endpoint yang tersedia beserta format request/response-nya, dan mengujinya langsung menggunakan tombol **"Try it out"**.
+
+![swagger-ui](swagger.png)
+
+---
+
 ## Kontrak Konfigurasi Laporan
 
 Endpoint `/api/reports` dan `/api/reports/export` menerima satu objek konfigurasi:
@@ -294,6 +307,70 @@ Konfigurasi laporan dapat disimpan, dimuat, diubah, dan dihapus.
 **PUT `/api/reports/saved/:id`** — ubah `name` dan/atau `config`. Body sama dengan POST. `404` bila tidak ada.
 
 **DELETE `/api/reports/saved/:id`** — hapus. `204` bila berhasil, `404` bila tidak ada.
+
+---
+
+### POST `/api/sales`
+
+Menambahkan satu record penjualan secara manual.
+
+**Request:**
+
+```json
+{
+  "salesperson_name": "Andi",
+  "city_name": "Jakarta",
+  "product_name": "Honda",
+  "amount": 120000000
+}
+```
+
+**Response `201`:**
+
+Data successfully saved.
+
+**Error validasi `400`:**
+
+Validation error.
+
+---
+
+### POST `/api/sales/bulk`
+
+Menambahkan banyak record penjualan sekaligus dari JSON (biasanya dari hasil parse CSV/XLSX).
+
+**Request:**
+
+```json
+[
+  {
+    "salesperson_name": "Andi",
+    "city_name": "Jakarta",
+    "product_name": "Honda",
+    "amount": 120000000
+  },
+  {
+    "salesperson_name": "Andi",
+    "city_name": "Bandung",
+    "product_name": "Yamaha",
+    "amount": 90000000
+  },
+  {
+    "salesperson_name": "Budi",
+    "city_name": "Jakarta",
+    "product_name": "Suzuki",
+    "amount": 80000000
+  }
+]
+```
+
+**Response `201`:**
+
+Rows successfully saved.
+
+**Error validasi `400`:**
+
+Validation error.
 
 ---
 
