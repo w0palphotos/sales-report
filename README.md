@@ -176,6 +176,43 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sales_report npm run 
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sales_report npm run db:seed
 ```
 
+> **Catatan:** `db:seed` hanya mengisi 7 transaksi contoh bawaan. Untuk dataset awal yang lebih lengkap, gunakan `data_awal.csv` dari **release v0.1** (lihat cara import di bawah).
+
+### Menambahkan data awal dari release (data_awal.csv)
+
+Dataset awal penjualan disediakan sebagai asset pada **GitHub Release v0.1**:
+https://github.com/w0palphotos/sales-report/releases/tag/v0.1
+
+Ada dua cara memuatnya ke database lokal:
+
+**Cara 1 — Via UI (direkomendasikan):**
+1. Unduh asset `data_awal.csv` dari halaman release di atas ke mesin Anda.
+2. Jalankan aplikasi (`npm run dev:backend` + `npm run dev:frontend`).
+3. Buka frontend → tab **Upload Batch (.csv / .xlsx)** → pilih file `data_awal.csv`.
+4. Klik simpan — data akan dikirim ke `POST /api/sales/bulk` dan tersimpan ke database.
+
+**Cara 2 — Via API langsung (`curl`):**
+```bash
+curl -X POST http://localhost:3000/api/sales/bulk \
+  -H "Content-Type: application/json" \
+  -d @- <<'EOF'
+[
+  { "salesperson_name": "Andi",  "city_name": "Jakarta",  "product_name": "Honda",  "amount": 120000000 },
+  { "salesperson_name": "Andi",  "city_name": "Bandung",  "product_name": "Yamaha", "amount": 90000000 },
+  { "salesperson_name": "Budi",  "city_name": "Jakarta",  "product_name": "Suzuki", "amount": 80000000 },
+  { "salesperson_name": "Budi",  "city_name": "Surabaya", "product_name": "Honda",  "amount": 95000000 },
+  { "salesperson_name": "Citra", "city_name": "Bandung",  "product_name": "Suzuki", "amount": 70000000 },
+  { "salesperson_name": "Citra", "city_name": "Surabaya", "product_name": "Yamaha", "amount": 85000000 },
+  { "salesperson_name": "Andi",  "city_name": "Jakarta",  "product_name": "Yamaha", "amount": 75000000 }
+]
+EOF
+```
+
+Format file `data_awal.csv` (kolom sama dengan yang dipakai fitur upload):
+```
+Nama Sales,Kota,Produk,Penjualan
+```
+
 ### Menjalankan dev
 
 ```bash
