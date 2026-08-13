@@ -148,8 +148,20 @@ ORDER BY "_r0" ASC, "_c" ASC
 
 ```bash
 npm install
-cp backend/.env.example backend/.env   # isi DATABASE_URL
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
+
+### Konfigurasi Environment Variables (.env)
+
+**1. Backend (`backend/.env`)**
+- `DATABASE_URL`: (Wajib) URL koneksi ke PostgreSQL.
+  - *Lokal (Docker/Native):* `postgresql://postgres:postgres@localhost:5432/sales_report`
+  - *Supabase:* Gunakan URL mode *transaction pooler* (berjalan di port `6543`).
+- `PORT`: (Opsional) Port backend untuk mode development, *default* `3000`.
+
+**2. Frontend (`frontend/.env`)**
+- `VITE_API_URL`: (Opsional) URL *base* untuk pemanggilan API. Secara *default*, Vite dikonfigurasi untuk mem-proxy rute `/api` secara same-origin. Anda **hanya perlu mengisi** variabel ini jika frontend dan backend dijalankan di *domain/origin* yang berbeda secara terpisah (misalnya `https://api.namadomain.com/api`).
 
 ### Siapkan database
 
@@ -178,6 +190,16 @@ npm test
 ```
 
 Unit test berjalan tanpa database (validasi, SQL builder, pivot terhadap contoh-contoh di assignment, CSV). Integration test (`test/db.integration.test.js`) memakai PostgreSQL embedded (PGlite) sehingga juga berjalan tanpa server eksternal.
+
+### Reset Database
+
+Jika Anda telah menambahkan banyak data percobaan (misalnya via upload CSV atau input manual) dan ingin mengembalikan database ke **keadaan awal (hanya berisi 7 transaksi default)**, Anda dapat menjalankan perintah *seed* kembali dari terminal:
+
+```bash
+npm run db:seed
+```
+
+Perintah ini bersifat *idempotent*; di mana ia akan melakukan `TRUNCATE` (mengosongkan seluruh isi tabel) terlebih dahulu, lalu memasukkan ulang 7 data transaksi bawaan.
 
 ---
 
