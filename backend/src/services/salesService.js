@@ -39,7 +39,7 @@ export async function insertSales(dataArray) {
       insertedCount++;
     }
     
-    await client.query('COMMIT');
+      await client.query('COMMIT');
     return { count: insertedCount };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -47,4 +47,17 @@ export async function insertSales(dataArray) {
   } finally {
     client.release();
   }
+}
+
+export async function listSales() {
+  const result = await pool.query(`
+    SELECT s.id, sp.name AS salesperson_name, c.name AS city_name, p.name AS product_name,
+           s.amount, s.created_at
+    FROM sales s
+    JOIN salespeople sp ON s.salesperson_id = sp.id
+    JOIN cities c ON s.city_id = c.id
+    JOIN products p ON s.product_id = p.id
+    ORDER BY s.id ASC
+  `);
+  return result.rows;
 }

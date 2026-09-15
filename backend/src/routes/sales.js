@@ -1,7 +1,16 @@
 import { Router } from 'express';
-import { insertSales } from '../services/salesService.js';
+import { insertSales, listSales } from '../services/salesService.js';
 
 const router = Router();
+
+router.get('/', async (_req, res, next) => {
+  try {
+    const sales = await listSales();
+    res.json({ sales });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post('/', async (req, res, next) => {
   try {

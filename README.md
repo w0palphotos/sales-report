@@ -19,10 +19,10 @@ Dibangun untuk technical interview assignment:
 | Kolom | 0–1 field dimensi ditampilkan horizontal (dibentuk dari data) |
 | Nilai | 1–3 measure dengan perhitungan `sum`, `avg`, atau `count` |
 | Filter | Banyak filter sekaligus; operator `=`, `!=`, `>`, `<`, `>=`, `<=`, `contains`, `between` |
-| Tabel dinamis | Header berlapis, kolom + baris total, sel kosong ditampilkan Rp0 |
+| Tabel dinamis | Header berlapis, kolom + baris total, spreadsheet-like grid dengan sorting & filtering (Handsontable) |
 | Sorting | Klik header kolom (asc / desc / none) |
 | Grafik | Bar chart dari hasil laporan (Chart.js) |
-| Export CSV | Unduh hasil laporan sebagai CSV |
+| Export XLSX | Unduh hasil laporan sebagai file Excel (.xlsx) dengan sheet pivot table dan sheet visualisasi berisi grafik chart native yang otomatis ter-update saat data diedit |
 | Laporan tersimpan | Simpan / muat / hapus konfigurasi laporan dengan nama |
 | Input Data | UI untuk entry manual atau bulk upload via file (.csv, .xlsx) |
 
@@ -74,7 +74,7 @@ Struktur repo:
 └── docker-compose.yml                      # opsional: PostgreSQL lokal
 ```
 
-**Dependency runtime**: backend hanya `express` dan `pg`. Frontend hanya `vue`, `vite`, `chart.js`, `vue-chartjs`. Semua logika inti (validasi, SQL, pivot, CSV) adalah fungsi murni yang mudah diuji.
+**Dependency runtime**: backend hanya `express` dan `pg`. Frontend hanya `vue`, `vite`, `chart.js`, `vue-chartjs`, `exceljs`, `jszip`, `handsontable`, `@handsontable/vue3`. Semua logika inti (validasi, SQL, pivot, CSV/XLSX) adalah fungsi murni yang mudah diuji.
 
 ---
 

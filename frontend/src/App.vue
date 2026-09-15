@@ -10,11 +10,9 @@ const currentView = ref('report');
   <div class="ambient" aria-hidden="true"></div>
   <div class="app">
     <header class="main-nav">
-      <div class="container nav-container">
-        <div class="nav-links">
-          <button :class="{ active: currentView === 'report' }" @click="currentView = 'report'">Laporan</button>
-          <button :class="{ active: currentView === 'input' }" @click="currentView = 'input'">Input Data</button>
-        </div>
+      <div class="nav-links">
+        <button :class="{ active: currentView === 'report' }" @click="currentView = 'report'">Laporan</button>
+        <button :class="{ active: currentView === 'input' }" @click="currentView = 'input'">Input Data</button>
       </div>
     </header>
 
@@ -29,56 +27,47 @@ const currentView = ref('report');
 .main-nav {
   position: fixed;
   top: 16px;
-  left: 77%;
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.6);
+  left: 24px;
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--border, #e5e5e3);
   border-radius: 9999px;
-  padding: 8px 16px 8px 24px;
+  padding: 4px;
   z-index: 50;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
-.nav-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 32px;
-}
-.brand {
-  font-weight: 600;
-  font-size: 0.95rem;
-  letter-spacing: -0.02em;
-  color: var(--ink-strong);
-}
+
 .nav-links {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
+
 .nav-links button {
   background: transparent;
   border: none;
   padding: 6px 14px;
   cursor: pointer;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   border-radius: 9999px;
-  color: var(--muted);
+  color: var(--muted, #787774);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 .nav-links button:hover {
-  color: var(--ink-strong);
-  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink-strong, #111111);
+  background: rgba(0, 0, 0, 0.04);
 }
+
 .nav-links button.active {
-  background: var(--ink-strong);
+  background: var(--ink-strong, #111111);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .main-content {
-  padding-top: 100px;
+  padding-top: 68px;
 }
 
 .ambient {

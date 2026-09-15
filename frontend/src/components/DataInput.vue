@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { apiBase } from '../api/client.js';
 
 const mode = ref('manual');
@@ -83,12 +83,30 @@ const handleFileUpload = (e) => {
     });
   } else if (ext === 'xlsx' || ext === 'xls') {
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+        const buffer = evt.target.result;
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(buffer);
+        const worksheet = workbook.worksheets[0];
+        const json = [];
+        const headers = [];
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) {
+            row.eachCell((cell, colNumber) => {
+              headers[colNumber] = String(cell.value ?? '').trim();
+            });
+          } else {
+            const rowObj = {};
+            row.eachCell((cell, colNumber) => {
+              const header = headers[colNumber];
+              if (header) {
+                rowObj[header] = cell.value;
+              }
+            });
+            json.push(rowObj);
+          }
+        });
         processDataArray(json);
       } catch (err) {
         fileError.value = `Gagal membaca XLSX: ${err.message}`;

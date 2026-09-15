@@ -13,11 +13,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@handsontable/vue3": "^18.1.0",
     "chart.js": "^4.4.7",
+    "exceljs": "^4.4.0",
+    "handsontable": "^18.1.0",
+    "jszip": "^3.10.1",
     "papaparse": "^5.5.4",
     "vue": "^3.5.13",
-    "vue-chartjs": "^5.3.2",
-    "xlsx": "^0.18.5"
+    "vue-chartjs": "^5.3.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",

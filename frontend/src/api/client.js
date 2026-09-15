@@ -21,6 +21,8 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
 export const api = {
   getMeta: () => request('/meta/fields'),
 
+  listSales: () => request('/sales'),
+
   runReport: (config) => request('/reports', { method: 'POST', body: JSON.stringify(config) }),
 
   exportCsv: async (config) => {

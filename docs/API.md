@@ -243,6 +243,8 @@ Keterangan struktur response:
 
 Sama seperti `/api/reports`, tetapi mengembalikan file CSV sebagai attachment.
 
+> **Catatan:** UI frontend sekarang menggunakan export file **Excel (.xlsx)** yang dibuat langsung di browser via SheetJS (`xlsx`) sesuai dengan format pivot tabel yang aktif. Endpoint `/api/reports/export` ini tetap tersedia di backend untuk kebutuhan programmatic (skrip, curl, integrasi).
+
 **Request:**
 
 ```json

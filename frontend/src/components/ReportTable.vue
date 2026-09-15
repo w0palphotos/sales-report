@@ -1,12 +1,21 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { HotTable } from '@handsontable/vue3';
+import { registerAllModules } from 'handsontable/registry';
+import Handsontable from 'handsontable';
+import 'handsontable/styles/handsontable.min.css';
+import 'handsontable/styles/ht-theme-main.min.css';
 import { formatRupiah } from '../utils/format.js';
 
-const ALL = '__all__';
+registerAllModules();
 
 const props = defineProps({
   result: { type: Object, required: true },
 });
+
+const emit = defineEmits(['filter-change']);
+
+const hotRef = ref(null);
 
 const rowFields = computed(() => props.result.meta.rowFields ?? []);
 const columnField = computed(() => props.result.meta.columnField ?? null);
@@ -15,252 +24,249 @@ const columnKeys = computed(() => props.result.columnKeys ?? []);
 const columnTotals = computed(() => props.result.columnTotals ?? {});
 const grandTotal = computed(() => props.result.grandTotal ?? []);
 
-const active = ref(null);
+const rowDimCount = computed(() => rowFields.value.length);
 
-const fmt = formatRupiah;
+const nestedHeaders = computed(() => {
+  if (!props.result) return [];
+  const rows = rowFields.value;
+  const vals = valueColumns.value;
+  const cols = columnKeys.value;
 
-const isActive = (key) => (active.value?.key === key ? active.value.dir : '');
+  if (columnField.value) {
+    const topRow = [
+      ...rows.map((rf) => ({ label: rf.label, rowspan: 2 })),
+      ...cols.map((ck) => ({ label: ck, colspan: vals.length })),
+      { label: 'Grand Total', colspan: vals.length },
+    ];
+    const bottomRow = [
+      ...cols.flatMap(() => vals.map((v) => v.label)),
+      ...vals.map((v) => v.label),
+    ];
+    return [topRow, bottomRow];
+  }
 
-function toggleSort(key) {
-  if (active.value?.key === key) {
-    active.value = active.value.dir === 'asc' ? { ...active.value, dir: 'desc' } : null;
+  return [
+    [
+      ...rows.map((rf) => rf.label),
+      ...vals.map((v) => v.label),
+    ],
+  ];
+});
+
+const tableData = computed(() => {
+  if (!props.result) return [];
+  const data = [];
+  const rFields = rowFields.value;
+  const cKeys = columnKeys.value;
+  const hasCol = Boolean(columnField.value);
+
+  // Data rows
+  for (const row of props.result.rows ?? []) {
+    const rowArr = [];
+    for (const rf of rFields) {
+      rowArr.push(row.key[rf.key] ?? '');
+    }
+    if (hasCol) {
+      for (const ck of cKeys) {
+        const cellVals = row.cells[ck] ?? [];
+        for (const val of cellVals) {
+          rowArr.push(val);
+        }
+      }
+      for (const val of row.rowTotal ?? []) {
+        rowArr.push(val);
+      }
+    } else {
+      for (const val of row.cells['__all__'] ?? []) {
+        rowArr.push(val);
+      }
+    }
+    data.push(rowArr);
+  }
+
+  // Total footer row
+  const totalRow = [];
+  rFields.forEach((_, i) => {
+    totalRow.push(i === 0 ? 'Grand Total' : '');
+  });
+  if (hasCol) {
+    for (const ck of cKeys) {
+      const colTot = columnTotals.value[ck] ?? [];
+      for (const val of colTot) {
+        totalRow.push(val);
+      }
+    }
+    for (const val of grandTotal.value) {
+      totalRow.push(val);
+    }
   } else {
-    active.value = { key, dir: 'asc' };
+    for (const val of grandTotal.value) {
+      totalRow.push(val);
+    }
+  }
+  data.push(totalRow);
+
+  return data;
+});
+
+function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
+  Handsontable.renderers.TextRenderer.apply(this, arguments);
+  const totalRowIndex = instance.countRows() - 1;
+  const isTotalRow = row === totalRowIndex;
+  const isValueCol = col >= rowDimCount.value;
+
+  if (isValueCol && typeof value === 'number') {
+    td.innerText = formatRupiah(value);
+    td.style.textAlign = 'right';
+    td.style.fontVariantNumeric = 'tabular-nums';
+  } else if (!isValueCol) {
+    td.style.textAlign = 'left';
+    td.style.fontWeight = '500';
+  }
+
+  if (isTotalRow) {
+    td.style.fontWeight = '700';
+    td.style.background = 'var(--surface-alt, #f7f6f3)';
+    td.style.borderTop = '2px solid var(--border, #e5e5e3)';
   }
 }
 
-const sortedRows = computed(() => {
-  const rows = props.result.rows ?? [];
-  const sort = active.value;
-  if (!sort) return rows;
+function getVisibleResult(instance) {
+  if (!instance || !props.result) return props.result;
+  const count = instance.countRows();
+  const visibleRows = [];
+  const rawRows = props.result.rows ?? [];
+  const totalRowPhysicalIndex = rawRows.length;
 
-  const getValue = (row) => {
-    if (sort.key.startsWith('row:')) {
-      return row.key[rowFields.value[Number(sort.key.slice(4))].key];
+  for (let visualRow = 0; visualRow < count; visualRow++) {
+    const physicalRow = instance.toPhysicalRow(visualRow);
+    if (physicalRow >= 0 && physicalRow < totalRowPhysicalIndex && rawRows[physicalRow]) {
+      visibleRows.push(rawRows[physicalRow]);
     }
-    if (sort.key.startsWith('value')) {
-      const [, colKey, vi] = sort.key.split(':');
-      return row.cells[colKey || ALL]?.[Number(vi)] ?? 0;
+  }
+
+  const hasCol = Boolean(columnField.value);
+  const valCount = valueColumns.value.length;
+  const cKeys = columnKeys.value;
+
+  const recalculatedColumnTotals = {};
+  for (const ck of cKeys) {
+    recalculatedColumnTotals[ck] = Array(valCount).fill(0);
+  }
+  const recalculatedGrandTotal = Array(valCount).fill(0);
+
+  for (const row of visibleRows) {
+    if (hasCol) {
+      for (const ck of cKeys) {
+        const cells = row.cells[ck] ?? [];
+        for (let v = 0; v < valCount; v++) {
+          recalculatedColumnTotals[ck][v] += Number(cells[v]) || 0;
+        }
+      }
+      for (let v = 0; v < valCount; v++) {
+        recalculatedGrandTotal[v] += Number(row.rowTotal?.[v]) || 0;
+      }
+    } else {
+      const cells = row.cells['__all__'] ?? [];
+      for (let v = 0; v < valCount; v++) {
+        recalculatedGrandTotal[v] += Number(cells[v]) || 0;
+      }
     }
-    return row.rowTotal[Number(sort.key.slice(6))] ?? 0;
+  }
+
+  return {
+    ...props.result,
+    rows: visibleRows,
+    columnTotals: recalculatedColumnTotals,
+    grandTotal: recalculatedGrandTotal,
   };
+}
 
-  const sign = sort.dir === 'asc' ? 1 : -1;
-  return [...rows].sort((x, y) => {
-    const vx = getValue(x);
-    const vy = getValue(y);
-    if (vx === vy) return 0;
-    if (typeof vx === 'string' && typeof vy === 'string') return vx.localeCompare(vy) * sign;
-    return (vx > vy ? 1 : -1) * sign;
+function notifyFilterChange() {
+  nextTick(() => {
+    const instance = hotRef.value?.hotInstance;
+    if (instance) {
+      const filtered = getVisibleResult(instance);
+      emit('filter-change', filtered);
+    }
   });
+}
+
+const hotSettings = computed(() => ({
+  data: tableData.value,
+  nestedHeaders: nestedHeaders.value,
+  readOnly: true,
+  // ponytail: read-only mode for report viewer; upgrade to editable if live calculation needed
+  licenseKey: 'non-commercial-and-evaluation',
+  renderer: cellRenderer,
+  columnSorting: true,
+  dropdownMenu: true,
+  filters: true,
+  hiddenColumns: { indicators: true },
+  hiddenRows: { indicators: true },
+  contextMenu: ['hidden_columns_show', 'hidden_columns_hide'],
+  stretchH: 'all',
+  autoWrapRow: true,
+  autoWrapCol: true,
+  height: 'auto',
+  rowHeaders: true,
+  manualColumnResize: true,
+  themeName: 'ht-theme-main',
+  afterFilter() {
+    notifyFilterChange();
+  },
+  afterColumnSort() {
+    notifyFilterChange();
+  },
+}));
+
+watch(
+  () => props.result,
+  (newVal) => {
+    if (newVal) {
+      emit('filter-change', newVal);
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  if (props.result) {
+    emit('filter-change', props.result);
+  }
+});
+
+defineExpose({
+  hotRef,
+  tableData,
 });
 </script>
 
 <template>
-  <div class="table-scroll card">
-    <table class="report-table">
-      <thead>
-        <tr v-if="columnField" class="thead-group">
-          <th :colspan="rowFields.length" class="corner">Baris</th>
-          <th v-for="columnKey in columnKeys" :key="columnKey" :colspan="valueColumns.length" class="group-col">
-            {{ columnKey }}
-          </th>
-          <th :colspan="valueColumns.length" class="group-col total">Total</th>
-        </tr>
-        <tr>
-          <template v-if="columnField">
-            <th v-for="(field, index) in rowFields" :key="'row-head-' + index" class="row-head" :class="isActive('row:' + index)">
-              <button type="button" class="th-btn" @click="toggleSort('row:' + index)">
-                {{ field.label }}<span v-if="isActive('row:' + index)" class="sort-mark">{{ isActive('row:' + index) === 'asc' ? '▲' : '▼' }}</span>
-              </button>
-            </th>
-            <template v-for="columnKey in columnKeys" :key="'value-head-' + columnKey">
-              <th
-                v-for="(valueColumn, vi) in valueColumns"
-                :key="valueColumn.field + valueColumn.aggregation"
-                class="value-head"
-                :class="isActive('value:' + columnKey + ':' + vi)"
-              >
-                <button type="button" class="th-btn" @click="toggleSort('value:' + columnKey + ':' + vi)">
-                  {{ valueColumn.label }}<span v-if="isActive('value:' + columnKey + ':' + vi)" class="sort-mark">{{ isActive('value:' + columnKey + ':' + vi) === 'asc' ? '▲' : '▼' }}</span>
-                </button>
-              </th>
-            </template>
-            <th
-              v-for="(valueColumn, vi) in valueColumns"
-              :key="'total-head-' + vi"
-              class="value-head"
-              :class="isActive('total:' + vi)"
-            >
-              <button type="button" class="th-btn" @click="toggleSort('total:' + vi)">
-                {{ valueColumn.label }}<span v-if="isActive('total:' + vi)" class="sort-mark">{{ isActive('total:' + vi) === 'asc' ? '▲' : '▼' }}</span>
-              </button>
-            </th>
-          </template>
-          <template v-else>
-            <th v-for="(field, index) in rowFields" :key="'row-head-' + index" class="row-head" :class="isActive('row:' + index)">
-              <button type="button" class="th-btn" @click="toggleSort('row:' + index)">
-                {{ field.label }}<span v-if="isActive('row:' + index)" class="sort-mark">{{ isActive('row:' + index) === 'asc' ? '▲' : '▼' }}</span>
-              </button>
-            </th>
-            <th
-              v-for="(valueColumn, vi) in valueColumns"
-              :key="'value-head-' + vi"
-              class="value-head"
-              :class="isActive('value::' + vi)"
-            >
-              <button type="button" class="th-btn" @click="toggleSort('value::' + vi)">
-                {{ valueColumn.label }}<span v-if="isActive('value::' + vi)" class="sort-mark">{{ isActive('value::' + vi) === 'asc' ? '▲' : '▼' }}</span>
-              </button>
-            </th>
-          </template>
-        </tr>
-      </thead>
-
-      <tbody>
-        <tr v-for="(row, rowIndex) in sortedRows" :key="rowIndex">
-          <template v-if="columnField">
-            <td v-for="(field, index) in rowFields" :key="'row-key-' + index" class="row-cell">{{ row.key[field.key] }}</td>
-            <template v-for="columnKey in columnKeys" :key="'cell-' + columnKey">
-              <td v-for="(valueColumn, vi) in valueColumns" :key="valueColumn.field + valueColumn.aggregation" class="num">
-                {{ fmt(row.cells[columnKey][vi]) }}
-              </td>
-            </template>
-            <td v-for="(valueColumn, vi) in valueColumns" :key="'row-total-' + vi" class="num strong">{{ fmt(row.rowTotal[vi]) }}</td>
-          </template>
-          <template v-else>
-            <td v-for="(field, index) in rowFields" :key="'row-key-' + index" class="row-cell">{{ row.key[field.key] }}</td>
-            <td v-for="(valueColumn, vi) in valueColumns" :key="'cell-' + vi" class="num strong">{{ fmt(row.cells[ALL][vi]) }}</td>
-          </template>
-        </tr>
-      </tbody>
-
-      <tfoot>
-        <tr class="tfoot">
-          <td :colspan="rowFields.length" class="row-cell strong">Total</td>
-          <template v-if="columnField">
-            <template v-for="columnKey in columnKeys" :key="'foot-' + columnKey">
-              <td v-for="(valueColumn, vi) in valueColumns" :key="valueColumn.field + valueColumn.aggregation" class="num strong">
-                {{ fmt(columnTotals[columnKey][vi]) }}
-              </td>
-            </template>
-            <td v-for="(valueColumn, vi) in valueColumns" :key="'foot-total-' + vi" class="num strong">{{ fmt(grandTotal[vi]) }}</td>
-          </template>
-          <template v-else>
-            <td v-for="(valueColumn, vi) in valueColumns" :key="'foot-total-' + vi" class="num strong">{{ fmt(grandTotal[vi]) }}</td>
-          </template>
-        </tr>
-      </tfoot>
-    </table>
+  <div class="hot-container">
+    <HotTable :key="JSON.stringify(nestedHeaders) + '-' + tableData.length" ref="hotRef" :settings="hotSettings" />
   </div>
 </template>
 
 <style scoped>
-.table-scroll {
+.hot-container {
+  width: 100%;
   overflow-x: auto;
 }
 
-.report-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+:deep(.handsontable) {
+  font-family: var(--font-sans, inherit);
+  font-size: 13px;
+  color: var(--ink, #2f3437);
 }
 
-.report-table th,
-.report-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.report-table thead th {
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-alt);
-  font-size: 12px;
+:deep(.handsontable th) {
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--muted);
+  background: var(--surface-alt, #f7f6f3);
+  color: var(--ink-strong, #111111);
 }
 
-.thead-group .corner {
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--faint);
-}
-
-.thead-group .group-col {
-  text-align: center;
-  border-left: 1px solid var(--border);
-}
-
-.thead-group .group-col.total {
-  border-left: 2px solid var(--border);
-}
-
-.row-head {
-  text-align: left;
-}
-
-.value-head {
-  text-align: right;
-  border-left: 1px solid var(--border);
-}
-
-.report-table thead th.asc,
-.report-table thead th.desc {
-  color: var(--ink-strong);
-  background: var(--surface);
-}
-
-.th-btn {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sort-mark {
-  font-size: 9px;
-  color: var(--muted);
-}
-
-.row-cell {
-  text-align: left;
-  font-weight: 500;
-  color: var(--ink-strong);
-}
-
-td.num {
-  border-left: 1px solid var(--border);
-  color: var(--ink);
-}
-
-td.strong {
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-
-.tfoot td {
-  border-top: 2px solid var(--border);
-  border-bottom: 0;
-  background: var(--surface-alt);
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-
-tbody tr:hover td {
-  background: var(--canvas);
-}
-
-.empty-cell {
-  color: var(--faint);
+:deep(.handsontable td) {
+  padding: 6px 10px;
 }
 </style>
