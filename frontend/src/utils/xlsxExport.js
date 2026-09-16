@@ -92,7 +92,7 @@ export async function buildXlsxBuffer(report) {
       if (valCount > 1) {
         wsPivot.mergeCells(`${colToLetter(cOffset)}1:${colToLetter(cOffset + valCount - 1)}1`);
       }
-      cOffset += valCount;
+      cOffset += Math.max(1, valCount);
     }
     // Merges for Grand Total column
     if (valCount > 1) {
@@ -125,7 +125,7 @@ export async function buildXlsxBuffer(report) {
       line.push(...(row.cells['__all__'] ?? []));
     }
     const addedRow = wsPivot.addRow(line);
-    for (let colIdx = rowFields.length + 1; colIdx <= line.length; colIdx++) {
+    for (let colIdx = 1; colIdx <= line.length; colIdx++) {
       const cell = addedRow.getCell(colIdx);
       if (typeof cell.value === 'number') {
         cell.numFmt = '#,##0';

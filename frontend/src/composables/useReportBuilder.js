@@ -17,7 +17,7 @@ export function useReportBuilder() {
     filters: [],
   });
 
-  const canRun = computed(() => config.rows.length >= 1 && config.values.length >= 1);
+  const canRun = computed(() => config.rows.length + config.columns.length + config.values.length > 0);
 
   const usedRowFields = computed(() => new Set([...config.rows, ...config.columns]));
 
@@ -119,7 +119,11 @@ export function useReportBuilder() {
   }
 
   function setRow(index, key) {
-    config.rows[index] = key;
+    if (!key) {
+      removeRow(index);
+    } else {
+      config.rows[index] = key;
+    }
   }
 
   function removeRow(index) {

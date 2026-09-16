@@ -36,7 +36,7 @@ describe('API tanpa database', () => {
   });
 
   it('POST /api/reports menolak konfigurasi tidak valid dengan 400', async () => {
-    const res = await postJson('/api/reports', { rows: [], columns: [], values: [{ field: 'amount', aggregation: 'sum' }] });
+    const res = await postJson('/api/reports', { rows: [], columns: [], values: [] });
     assert.equal(res.status, 400);
     const body = await res.json();
     assert.ok(body.error);

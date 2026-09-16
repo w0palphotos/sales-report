@@ -19,13 +19,22 @@ const DIMENSION_QUERY = {
   sales_name: 'SELECT name FROM salespeople ORDER BY name',
   city: 'SELECT name FROM cities ORDER BY name',
   product: 'SELECT name FROM products ORDER BY name',
+  amount: 'SELECT DISTINCT amount::text AS name FROM sales ORDER BY amount',
 };
 
 export async function getMeta() {
   const values = {};
   for (const [key, dim] of Object.entries(DIMENSIONS)) {
-    const result = await pool.query(DIMENSION_QUERY[key]);
-    values[key] = result.rows.map((row) => row.name);
+    if (DIMENSION_QUERY[key]) {
+      try {
+        const result = await pool.query(DIMENSION_QUERY[key]);
+        values[key] = result.rows.map((row) => row.name);
+      } catch {
+        values[key] = [];
+      }
+    } else {
+      values[key] = [];
+    }
   }
 
   return {
@@ -43,6 +52,7 @@ export async function getMeta() {
     aggregations: Object.entries(AGGREGATIONS).map(([key, aggregation]) => ({
       key,
       label: aggregation.label,
+      allowedTypes: aggregation.allowedTypes,
     })),
     operators: Object.entries(OPERATORS).map(([key, operator]) => ({
       key,

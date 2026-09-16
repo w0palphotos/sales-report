@@ -16,10 +16,10 @@ describe('validateConfig', () => {
     );
   });
 
-  it('menolak konfigurasi tanpa baris', () => {
+  it('menolak konfigurasi kosong (tanpa baris, kolom, atau nilai)', () => {
     assert.throws(
-      () => validateConfig({ rows: [], columns: [], values: [SUM_AMOUNT] }),
-      (err) => err instanceof ValidationError && /baris/.test(err.message),
+      () => validateConfig({ rows: [], columns: [], values: [] }),
+      (err) => err instanceof ValidationError && /Pilih minimal satu/.test(err.message),
     );
   });
 
@@ -69,6 +69,23 @@ describe('validateConfig', () => {
     assert.throws(
       () => validateConfig({ rows: ['city'], columns: [], values: [SUM_AMOUNT], filters: [{ field: 'amount', operator: 'between', value: [1] }] }),
       (err) => err instanceof ValidationError,
+    );
+  });
+
+  it('menerima Penjualan sebagai baris dan Nama Sales sebagai nilai COUNT', () => {
+    assert.doesNotThrow(() =>
+      validateConfig({
+        rows: ['amount'],
+        columns: [],
+        values: [{ field: 'sales_name', aggregation: 'count' }],
+      }),
+    );
+  });
+
+  it('menolak perhitungan SUM pada field teks (Nama Sales)', () => {
+    assert.throws(
+      () => validateConfig({ rows: ['city'], columns: [], values: [{ field: 'sales_name', aggregation: 'sum' }] }),
+      (err) => err instanceof ValidationError && /tidak berlaku/.test(err.message),
     );
   });
 });
@@ -140,5 +157,16 @@ describe('buildReportQuery', () => {
       ],
     });
     assert.match(sql, /AND/);
+  });
+
+  it('membangun query dengan Penjualan sebagai baris dan Nama Sales COUNT sebagai nilai', () => {
+    const { sql } = buildReportQuery({
+      rows: ['amount'],
+      columns: [],
+      values: [{ field: 'sales_name', aggregation: 'count' }],
+    });
+    assert.match(sql, /SELECT s\.amount AS "_r0", COUNT\(salespeople\.name\) AS "_v0"/);
+    assert.match(sql, /JOIN salespeople ON s\.salesperson_id = salespeople\.id/);
+    assert.match(sql, /GROUP BY GROUPING SETS \(\(s\.amount\), \(\)\)/);
   });
 });

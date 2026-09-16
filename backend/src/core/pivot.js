@@ -18,14 +18,17 @@ export function pivotReport(dbRows, config) {
     ? { key: columns[0], label: DIMENSIONS[columns[0]].label }
     : null;
 
-  const valueColumns = values.map((value) => ({
-    field: value.field,
-    aggregation: value.aggregation,
-    label:
-      value.aggregation === 'count'
-        ? 'Jumlah Transaksi'
-        : `${AGGREGATIONS[value.aggregation].label} ${MEASURES[value.field].label}`,
-  }));
+  const valueColumns = values.map((value) => {
+    const fieldLabel = MEASURES[value.field]?.label ?? DIMENSIONS[value.field]?.label ?? value.field;
+    return {
+      field: value.field,
+      aggregation: value.aggregation,
+      label:
+        value.aggregation === 'count'
+          ? (value.field === 'amount' ? 'Jumlah Transaksi' : `Jumlah ${fieldLabel}`)
+          : `${AGGREGATIONS[value.aggregation].label} ${fieldLabel}`,
+    };
+  });
 
   const zeroRow = () => Array.from({ length: valueCount }, () => 0);
   const cellValues = (row) =>

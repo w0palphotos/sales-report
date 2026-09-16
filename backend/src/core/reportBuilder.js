@@ -15,8 +15,8 @@ const FK_BY_TABLE = {
 };
 
 function coerceValue(field, value) {
-  const measure = MEASURES[field];
-  if (measure?.type === 'number') {
+  const type = MEASURES[field]?.type ?? DIMENSIONS[field]?.type;
+  if (type === 'number') {
     const number = Number(value);
     if (!Number.isFinite(number)) throw new ValidationError(`Nilai filter tidak valid: ${value}`);
     return number;
@@ -34,10 +34,11 @@ export function validateConfig(config) {
   if (![rows, columns, values, filters].every(Array.isArray)) {
     throw new ValidationError('rows, columns, values, dan filters harus berupa array.');
   }
-  if (rows.length < 1) throw new ValidationError('Minimal pilih satu field sebagai baris.');
+  if (rows.length === 0 && columns.length === 0 && values.length === 0) {
+    throw new ValidationError('Pilih minimal satu baris, kolom, atau nilai.');
+  }
   if (rows.length > 3) throw new ValidationError('Maksimal tiga field baris.');
   if (columns.length > 1) throw new ValidationError('Maksimal satu field sebagai kolom.');
-  if (values.length < 1) throw new ValidationError('Minimal pilih satu nilai.');
   if (values.length > 3) throw new ValidationError('Maksimal tiga nilai.');
 
   for (const key of rows) {
@@ -54,9 +55,14 @@ export function validateConfig(config) {
 
   for (const item of values) {
     if (!item || typeof item !== 'object') throw new ValidationError('Setiap nilai harus berupa objek.');
-    if (!(item.field in MEASURES)) throw new ValidationError(`Field nilai tidak dikenal: ${item.field}`);
-    if (!(item.aggregation in AGGREGATIONS)) {
+    const measure = MEASURES[item.field];
+    if (!measure) throw new ValidationError(`Field nilai tidak dikenal: ${item.field}`);
+    const agg = AGGREGATIONS[item.aggregation];
+    if (!agg) {
       throw new ValidationError(`Perhitungan tidak dikenal: ${item.aggregation}`);
+    }
+    if (agg.allowedTypes && !agg.allowedTypes.includes(measure.type)) {
+      throw new ValidationError(`Perhitungan "${item.aggregation}" tidak berlaku untuk field "${item.field}" (${measure.type}).`);
     }
   }
 
@@ -95,11 +101,13 @@ export function buildReportQuery(config) {
   const params = [];
   const joins = new Set();
   const wantJoin = (field) => {
-    if (field in DIMENSIONS) joins.add(DIMENSIONS[field].table);
+    const table = DIMENSIONS[field]?.table || (field === 'sales_name' ? 'salespeople' : field === 'city' ? 'cities' : field === 'product' ? 'products' : null);
+    if (table) joins.add(table);
   };
 
   rows.forEach(wantJoin);
   columns.forEach(wantJoin);
+  values.forEach((v) => wantJoin(v.field));
   filters.forEach((filter) => wantJoin(filter.field));
 
   const joinsSql = [...joins].map((table) => `JOIN ${table} ON s.${FK_BY_TABLE[table]} = ${table}.id`);
@@ -107,7 +115,7 @@ export function buildReportQuery(config) {
   const select = [
     ...rows.map((key, i) => `${dimensionColumn(key)} AS "_r${i}"`),
     ...(columns.length ? [`${dimensionColumn(columns[0])} AS "_c"`] : []),
-    ...values.map((value, i) => `${AGGREGATIONS[value.aggregation].sql(MEASURES[value.field].column)} AS "_v${i}"`),
+    ...values.map((value, i) => `${AGGREGATIONS[value.aggregation].sql(MEASURES[value.field]?.column || dimensionColumn(value.field))} AS "_v${i}"`),
   ];
 
   const groupDimensions = [
@@ -115,9 +123,12 @@ export function buildReportQuery(config) {
     ...(columns.length ? [dimensionColumn(columns[0])] : []),
   ];
 
-  const groupingSets = columns.length
+  const rawSets = columns.length
     ? [`(${groupDimensions.join(', ')})`, `(${rows.map(dimensionColumn).join(', ')})`, `(${dimensionColumn(columns[0])})`, '()']
     : [`(${rows.map(dimensionColumn).join(', ')})`, '()'];
+
+  const groupingSets = Array.from(new Set(rawSets.filter(s => s !== '()')));
+  groupingSets.push('()');
 
   const where = [];
   for (const filter of filters) {
@@ -154,7 +165,7 @@ export function buildReportQuery(config) {
     ...joinsSql,
     where.length ? `WHERE ${where.join(' AND ')}` : '',
     `GROUP BY GROUPING SETS (${groupingSets.join(', ')})`,
-    `ORDER BY ${orderBy.join(', ')}`,
+    orderBy.length ? `ORDER BY ${orderBy.join(', ')}` : '',
   ]
     .filter(Boolean)
     .join('\n');

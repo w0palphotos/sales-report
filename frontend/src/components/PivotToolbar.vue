@@ -58,7 +58,8 @@ const columnOptionsFor = () =>
           <FieldSelect
             :model-value="row"
             :options="rowOptionsFor(index)"
-            placeholder="Baris"
+            placeholder="(Tanpa Baris)"
+            :allow-clear="true"
             @update:model-value="emit('set-row', index, $event)"
           />
           <button

@@ -19,12 +19,12 @@ export function usePivotGrid(resultSource) {
     if (columnField.value) {
       const topRow = [
         ...rows.map((rf) => ({ label: rf.label, rowspan: 2 })),
-        ...cols.map((ck) => ({ label: ck, colspan: vals.length })),
-        { label: 'Grand Total', colspan: vals.length },
+        ...cols.map((ck) => ({ label: ck, colspan: Math.max(1, vals.length) })),
+        { label: 'Grand Total', colspan: Math.max(1, vals.length) },
       ];
       const bottomRow = [
-        ...cols.flatMap(() => vals.map((v) => v.label)),
-        ...vals.map((v) => v.label),
+        ...cols.flatMap(() => vals.length ? vals.map((v) => v.label) : ['']),
+        ...(vals.length ? vals.map((v) => v.label) : ['']),
       ];
       return [topRow, bottomRow];
     }

@@ -28,11 +28,21 @@ function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
   const isValueCol = col >= rowDimCount.value;
 
   if (isValueCol && typeof value === 'number') {
-    td.innerText = formatRupiah(value);
+    const vals = props.result?.meta?.valueColumns ?? [];
+    const valIdx = vals.length ? (col - rowDimCount.value) % vals.length : 0;
+    const isCount = vals[valIdx]?.aggregation === 'count';
+
+    td.innerText = isCount ? value.toLocaleString('id-ID') : formatRupiah(value);
     td.style.textAlign = 'right';
     td.style.fontVariantNumeric = 'tabular-nums';
   } else if (!isValueCol) {
-    td.style.textAlign = 'left';
+    const rFields = props.result?.meta?.rowFields ?? [];
+    if (rFields[col]?.key === 'amount' && typeof value === 'number' && !isTotalRow) {
+      td.innerText = formatRupiah(value);
+      td.style.textAlign = 'right';
+    } else {
+      td.style.textAlign = 'left';
+    }
     td.style.fontWeight = '500';
   }
 

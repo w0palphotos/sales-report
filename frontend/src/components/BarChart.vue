@@ -69,6 +69,10 @@ const chartData = computed(() => {
   };
 });
 
+const isCurrentCount = computed(() => {
+  return valueColumns.value[valueIndex.value]?.aggregation === 'count';
+});
+
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -80,7 +84,12 @@ const chartOptions = computed(() => ({
     },
     tooltip: {
       callbacks: {
-        label: (context) => ` ${context.dataset.label}: Rp${Number(context.parsed.y).toLocaleString('id-ID')}`,
+        label: (context) => {
+          const val = Number(context.parsed.y);
+          return isCurrentCount.value
+            ? ` ${context.dataset.label}: ${val.toLocaleString('id-ID')}`
+            : ` ${context.dataset.label}: Rp${val.toLocaleString('id-ID')}`;
+        },
       },
     },
   },
@@ -93,7 +102,11 @@ const chartOptions = computed(() => ({
       beginAtZero: true,
       grid: { color: '#eaeaea' },
       border: { display: false },
-      ticks: { color: '#787774', font: { family: 'inherit', size: 12 }, callback: formatCompact },
+      ticks: {
+        color: '#787774',
+        font: { family: 'inherit', size: 12 },
+        callback: (val) => (isCurrentCount.value ? Number(val).toLocaleString('id-ID') : formatCompact(val)),
+      },
     },
   },
 }));
