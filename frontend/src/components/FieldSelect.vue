@@ -5,6 +5,7 @@ defineProps({
   options: { type: Array, default: () => [] },
   placeholder: { type: String, default: 'Pilih' },
   disabled: { type: Boolean, default: false },
+  allowClear: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -18,7 +19,7 @@ const emit = defineEmits(['update:modelValue']);
       :disabled="disabled"
       @change="emit('update:modelValue', $event.target.value)"
     >
-      <option value="" disabled>{{ placeholder }}</option>
+      <option value="" :disabled="!allowClear">{{ placeholder }}</option>
       <option v-for="option in options" :key="option.value" :value="option.value">
         {{ option.label }}
       </option>

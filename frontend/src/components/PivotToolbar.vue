@@ -92,6 +92,7 @@ const columnOptionsFor = () =>
             :model-value="config.columns[0] ?? ''"
             :options="columnOptionsFor()"
             placeholder="(Tanpa Kolom)"
+            :allow-clear="true"
             @update:model-value="$event ? emit('set-column', $event) : emit('clear-column')"
           />
           <button
