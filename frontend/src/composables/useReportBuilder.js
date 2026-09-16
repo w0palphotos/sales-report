@@ -1,4 +1,4 @@
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, watch } from 'vue';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import { api } from '../api/client.js';
@@ -626,6 +626,20 @@ export function useReportBuilder() {
       error.value = err.message;
     }
   }
+
+  let runTimeout;
+  watch(
+    config,
+    () => {
+      if (canRun.value) {
+        clearTimeout(runTimeout);
+        runTimeout = setTimeout(() => {
+          run();
+        }, 300);
+      }
+    },
+    { deep: true }
+  );
 
   return {
     meta,

@@ -90,7 +90,6 @@ async function handleSave() {
 
 function handleLoad(report) {
   loadReport(report);
-  run();
 }
 
 function toggleFilters() {
@@ -212,6 +211,7 @@ onMounted(async () => {
 
         <!-- Action Buttons -->
         <div class="sheet-actions">
+          <span v-if="running" class="sheet-label" style="margin-right: 8px;">Memproses…</span>
           <button
             type="button"
             class="btn btn-ghost btn-small"
@@ -219,14 +219,6 @@ onMounted(async () => {
             @click="toggleFilters"
           >
             Filter {{ config.filters.length > 0 ? `(${config.filters.length})` : '' }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary btn-small"
-            :disabled="!canRun || running"
-            @click="run"
-          >
-            {{ running ? 'Memproses…' : 'Tampilkan Laporan' }}
           </button>
           <button
             type="button"
