@@ -24,17 +24,36 @@ function patch(patchObject) {
         {{ aggregation.label }}
       </option>
     </select>
-    <button type="button" class="btn-icon" :aria-label="`Hapus nilai ${index + 1}`" @click="emit('remove')">
-      <span aria-hidden="true">&times;</span>
+    <button
+      v-if="index > 0"
+      type="button"
+      class="chip-remove"
+      :aria-label="`Hapus nilai ${index + 1}`"
+      @click="emit('remove')"
+    >
+      &times;
     </button>
   </div>
 </template>
 
 <style scoped>
 .value-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 8px;
-  align-items: end;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-remove {
+  background: none;
+  border: 0;
+  font-size: 14px;
+  color: var(--muted, #787774);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: var(--ink-strong, #111111);
 }
 </style>

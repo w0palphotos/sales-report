@@ -11,7 +11,7 @@ const emit = defineEmits(['update:modelValue']);
 </script>
 
 <template>
-  <label class="field-control">
+  <div class="field-control">
     <span v-if="label" class="field-label">{{ label }}</span>
     <select
       :value="modelValue"
@@ -23,5 +23,5 @@ const emit = defineEmits(['update:modelValue']);
         {{ option.label }}
       </option>
     </select>
-  </label>
+  </div>
 </template>

@@ -492,6 +492,8 @@ export function useReportBuilder() {
     }
   }
 
+  let lastPayloadJson = null;
+
   async function run() {
     if (!canRun.value) {
       error.value = 'Pilih minimal satu baris dan satu nilai.';
@@ -500,7 +502,9 @@ export function useReportBuilder() {
     running.value = true;
     error.value = null;
     try {
-      result.value = await api.runReport(configToPayload());
+      const payload = configToPayload();
+      lastPayloadJson = JSON.stringify(payload);
+      result.value = await api.runReport(payload);
     } catch (err) {
       error.value = err.message;
     } finally {
@@ -632,6 +636,8 @@ export function useReportBuilder() {
     config,
     () => {
       if (canRun.value) {
+        const nextPayloadJson = JSON.stringify(configToPayload());
+        if (nextPayloadJson === lastPayloadJson) return;
         clearTimeout(runTimeout);
         runTimeout = setTimeout(() => {
           run();
