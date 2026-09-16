@@ -1,14 +1,15 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { defineAsyncComponent, onMounted, ref } from 'vue';
 import { useReportBuilder } from '../composables/useReportBuilder.js';
 import { api } from '../api/client.js';
-import FieldSelect from './FieldSelect.vue';
-import ValueBuilder from './ValueBuilder.vue';
-import FilterBuilder from './FilterBuilder.vue';
 import RawDataTable from './RawDataTable.vue';
+import PivotToolbar from './PivotToolbar.vue';
+import FilterDrawer from './FilterDrawer.vue';
+import SaveDrawer from './SaveDrawer.vue';
 import ReportTable from './ReportTable.vue';
-import BarChart from './BarChart.vue';
 import SavedReports from './SavedReports.vue';
+
+const BarChart = defineAsyncComponent(() => import('./BarChart.vue'));
 
 const {
   meta,
@@ -19,7 +20,6 @@ const {
   savedReports,
   config,
   canRun,
-  availableDimensions,
   loadMeta,
   refreshSaved,
   run,
@@ -49,25 +49,6 @@ const reportName = ref('');
 const showFilters = ref(false);
 const showSaveModal = ref(false);
 
-const dimensions = computed(() => meta.value?.dimensions ?? []);
-
-const rowOptionsFor = (index) =>
-  dimensions.value
-    .filter((dimension) => {
-      const used = new Set(config.rows.filter((_, j) => j !== index));
-      config.columns.forEach((column) => used.add(column));
-      return !used.has(dimension.key);
-    })
-    .map((dimension) => ({ value: dimension.key, label: dimension.label }));
-
-const columnOptionsFor = () =>
-  dimensions.value
-    .filter((dimension) => {
-      const used = new Set(config.rows);
-      return !used.has(dimension.key) || dimension.key === config.columns[0];
-    })
-    .map((dimension) => ({ value: dimension.key, label: dimension.label }));
-
 async function loadRawSales() {
   rawLoading.value = true;
   try {
@@ -90,6 +71,10 @@ async function handleSave() {
 
 function handleLoad(report) {
   loadReport(report);
+}
+
+function handleExport() {
+  downloadXlsx(filteredResult.value || result.value);
 }
 
 function toggleFilters() {
@@ -123,170 +108,41 @@ onMounted(async () => {
 
     <!-- 2. Pivot Table Card with Integrated Controls -->
     <section v-else-if="result" class="spreadsheet-card card">
-      <!-- Top Spreadsheet Control Bar -->
-      <div class="sheet-toolbar">
-        <div class="sheet-controls">
-          <span class="sheet-title-badge">Pivot Table</span>
+      <PivotToolbar
+        :config="config"
+        :meta="meta"
+        :running="running"
+        :has-result="!!result"
+        :show-filters="showFilters"
+        @set-row="setRow"
+        @remove-row="removeRow"
+        @add-row="addRow"
+        @set-column="setColumn"
+        @clear-column="clearColumn"
+        @update-value="updateValue"
+        @remove-value="removeValue"
+        @add-value="addValue"
+        @toggle-filters="toggleFilters"
+        @export="handleExport"
+        @toggle-save="showSaveModal = !showSaveModal"
+        @reset="reset"
+      />
 
-          <!-- Rows -->
-          <div class="sheet-control-group">
-            <span class="sheet-label">Baris:</span>
-            <div v-for="(row, index) in config.rows" :key="'row-' + index" class="sheet-select-wrap">
-              <FieldSelect
-                :model-value="row"
-                :options="rowOptionsFor(index)"
-                placeholder="Baris"
-                @update:model-value="setRow(index, $event)"
-              />
-              <button
-                v-if="config.rows.length > 1"
-                type="button"
-                class="chip-remove"
-                :aria-label="`Hapus baris ${index + 1}`"
-                @click="removeRow(index)"
-              >
-                &times;
-              </button>
-            </div>
-            <button
-              v-if="config.rows.length < 3"
-              type="button"
-              class="btn btn-ghost btn-small"
-              title="Tambah baris"
-              @click="addRow"
-            >
-              +
-            </button>
-          </div>
+      <FilterDrawer
+        v-if="showFilters || config.filters.length > 0"
+        :filters="config.filters"
+        :meta="meta"
+        @update="updateFilter"
+        @remove="removeFilter"
+        @add="addFilter"
+      />
 
-          <div class="sheet-divider"></div>
-
-          <!-- Columns -->
-          <div class="sheet-control-group">
-            <span class="sheet-label">Kolom:</span>
-            <div class="sheet-select-wrap">
-              <FieldSelect
-                :model-value="config.columns[0] ?? ''"
-                :options="columnOptionsFor()"
-                placeholder="(Tanpa Kolom)"
-                @update:model-value="$event ? setColumn($event) : clearColumn()"
-              />
-              <button
-                v-if="config.columns.length"
-                type="button"
-                class="chip-remove"
-                aria-label="Bersihkan kolom"
-                @click="clearColumn"
-              >
-                &times;
-              </button>
-            </div>
-          </div>
-
-          <div class="sheet-divider"></div>
-
-          <!-- Values -->
-          <div class="sheet-control-group">
-            <span class="sheet-label">Nilai:</span>
-            <div v-for="(val, index) in config.values" :key="'val-' + index" class="sheet-val-wrap">
-              <ValueBuilder
-                :value="val"
-                :meta="meta"
-                :index="index"
-                @update="updateValue(index, $event)"
-                @remove="removeValue(index)"
-              />
-            </div>
-            <button
-              v-if="config.values.length < 3"
-              type="button"
-              class="btn btn-ghost btn-small"
-              title="Tambah nilai"
-              @click="addValue"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="sheet-actions">
-          <span v-if="running" class="sheet-label" style="margin-right: 8px;">Memproses…</span>
-          <button
-            type="button"
-            class="btn btn-ghost btn-small"
-            :class="{ active: showFilters || config.filters.length > 0 }"
-            @click="toggleFilters"
-          >
-            Filter {{ config.filters.length > 0 ? `(${config.filters.length})` : '' }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary btn-small"
-            :disabled="!result"
-            @click="downloadXlsx(filteredResult || result)"
-          >
-            Export XLSX
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost btn-small"
-            :disabled="!result"
-            @click="showSaveModal = !showSaveModal"
-          >
-            Simpan
-          </button>
-          <button type="button" class="btn btn-ghost btn-small" @click="reset">
-            Reset
-          </button>
-        </div>
-      </div>
-
-      <!-- Expandable Filters Drawer -->
-      <div v-if="showFilters || config.filters.length > 0" class="sheet-drawer">
-        <div class="drawer-head">
-          <span class="sheet-label">Filter Kondisi</span>
-          <button type="button" class="btn btn-ghost btn-small" @click="addFilter">+ Tambah Filter</button>
-        </div>
-        <div class="drawer-list">
-          <FilterBuilder
-            v-for="(filter, index) in config.filters"
-            :key="index"
-            :filter="filter"
-            :meta="meta"
-            :index="index"
-            @update="updateFilter(index, $event)"
-            @remove="removeFilter(index)"
-          />
-        </div>
-      </div>
-
-      <!-- Save Report Drawer -->
-      <div v-if="showSaveModal && result" class="sheet-drawer">
-        <div class="save-row">
-          <input
-            v-model="reportName"
-            type="text"
-            placeholder="Nama konfigurasi laporan ini…"
-            @keyup.enter="handleSave"
-          />
-          <button
-            type="button"
-            class="btn btn-primary btn-small"
-            :disabled="!reportName.trim()"
-            @click="handleSave"
-          >
-            Simpan
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost btn-small"
-            @click="showSaveModal = false"
-          >
-            Batal
-          </button>
-        </div>
-      </div>
+      <SaveDrawer
+        v-if="showSaveModal && result"
+        v-model="reportName"
+        @save="handleSave"
+        @cancel="showSaveModal = false"
+      />
 
       <!-- Handsontable Spreadsheet View -->
       <div class="sheet-grid-wrapper">
@@ -297,7 +153,12 @@ onMounted(async () => {
     <!-- 3. Visualization Card -->
     <section v-if="result" class="chart-card card">
       <h3 class="chart-title">Visualisasi</h3>
-      <BarChart :result="filteredResult || result" />
+      <Suspense>
+        <BarChart :result="filteredResult || result" />
+        <template #fallback>
+          <p class="chart-loading">Memuat grafik…</p>
+        </template>
+      </Suspense>
     </section>
 
     <!-- 4. Saved Reports Section -->
@@ -327,129 +188,6 @@ onMounted(async () => {
   border-radius: var(--radius, 8px);
 }
 
-.sheet-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
-  background: var(--surface-alt, #f7f6f3);
-  border-bottom: 1px solid var(--border, #e5e5e3);
-  flex-wrap: wrap;
-}
-
-.sheet-title-badge {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  background: var(--surface, #ffffff);
-  color: var(--ink-strong, #111111);
-  border: 1px solid var(--border, #e5e5e3);
-  border-radius: var(--radius-sm, 4px);
-}
-
-.sheet-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.sheet-control-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sheet-label {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted, #787774);
-  white-space: nowrap;
-}
-
-.sheet-select-wrap {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.sheet-val-wrap {
-  display: flex;
-  align-items: center;
-}
-
-.sheet-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border, #e5e5e3);
-}
-
-.chip-remove {
-  background: none;
-  border: 0;
-  font-size: 14px;
-  color: var(--muted, #787774);
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-}
-
-.chip-remove:hover {
-  color: var(--ink-strong, #111111);
-}
-
-.sheet-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-
-.sheet-actions .btn.active {
-  background: var(--surface, #ffffff);
-  color: var(--ink-strong, #111111);
-  border-color: var(--border-strong, #999);
-}
-
-.sheet-drawer {
-  padding: 12px 14px;
-  background: var(--surface, #ffffff);
-  border-bottom: 1px solid var(--border, #e5e5e3);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.drawer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.save-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.save-row input {
-  max-width: 320px;
-}
-
 .sheet-grid-wrapper {
   padding: 12px;
 }
@@ -464,6 +202,13 @@ onMounted(async () => {
 .chart-title {
   font-size: 18px;
   margin-bottom: 16px;
+}
+
+.chart-loading {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--muted, #787774);
+  font-size: 13px;
 }
 
 .error-banner {
@@ -482,12 +227,5 @@ onMounted(async () => {
 
 .saved-section {
   padding-top: 8px;
-}
-
-@media (max-width: 768px) {
-  .sheet-actions {
-    margin-left: 0;
-    width: 100%;
-  }
 }
 </style>

@@ -42,18 +42,4 @@ function patch(patchObject) {
   align-items: center;
   gap: 4px;
 }
-
-.chip-remove {
-  background: none;
-  border: 0;
-  font-size: 14px;
-  color: var(--muted, #787774);
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-}
-
-.chip-remove:hover {
-  color: var(--ink-strong, #111111);
-}
 </style>

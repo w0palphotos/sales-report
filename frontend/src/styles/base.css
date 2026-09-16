@@ -280,3 +280,28 @@ kbd {
   font-size: 11px;
   letter-spacing: 0.06em;
 }
+
+/* Label kecil + tombol hapus chip (dipakai toolbar pivot & builder nilai) */
+.sheet-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #787774);
+  white-space: nowrap;
+}
+
+.chip-remove {
+  background: none;
+  border: 0;
+  font-size: 14px;
+  color: var(--muted, #787774);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: var(--ink-strong, #111111);
+}
