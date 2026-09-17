@@ -15,7 +15,11 @@ export function useReportBuilder() {
     columns: [],
     values: [],
     filters: [],
+    colors: {},
   });
+
+  const globalColors = ref({});
+  const colorsEnabled = ref(true);
 
   const canRun = computed(() => config.rows.length + config.columns.length + config.values.length > 0);
 
@@ -38,7 +42,16 @@ export function useReportBuilder() {
         operator: '=',
         value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : filter.value,
       })),
+    colors: JSON.parse(JSON.stringify(config.colors ?? {})),
   });
+
+  // Payload bersih untuk backend: tanpa colors (override warna hanya urusan tampil),
+  // agar ubah warna laporan tidak memicu fetch sia-sia.
+  const backendPayload = () => {
+    const payload = configToPayload();
+    delete payload.colors;
+    return payload;
+  };
 
   const hasValidValue = (filter) => {
     if (Array.isArray(filter.value)) return filter.value.every((item) => item !== '' && item != null);
@@ -76,7 +89,7 @@ export function useReportBuilder() {
     running.value = true;
     error.value = null;
     try {
-      const payload = configToPayload();
+      const payload = backendPayload();
       lastPayloadJson = JSON.stringify(payload);
       result.value = await api.runReport(payload);
     } catch (err) {
@@ -115,6 +128,7 @@ export function useReportBuilder() {
     config.columns = [];
     config.values = [];
     config.filters = [];
+    config.colors = {};
     result.value = null;
     error.value = null;
     lastPayloadJson = null;
@@ -201,9 +215,55 @@ export function useReportBuilder() {
         field: filter.field ?? '',
         value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : (filter.value ?? ''),
       })),
+      colors:
+        report.config.colors && typeof report.config.colors === 'object'
+          ? JSON.parse(JSON.stringify(report.config.colors))
+          : {},
     });
     result.value = null;
     error.value = null;
+  }
+
+  function toColorMap(list) {
+    const map = {};
+    for (const item of list ?? []) {
+      if (!item || !item.field || item.value == null) continue;
+      if (!map[item.field]) map[item.field] = {};
+      map[item.field][String(item.value)] = { bg: item.bg, color: item.color ?? '#2f3437' };
+    }
+    return map;
+  }
+
+  async function loadColors() {
+    try {
+      const data = await api.colors.list();
+      globalColors.value = toColorMap(data?.colors);
+    } catch (err) {
+      console.warn('Gagal memuat warna kategori:', err.message);
+    }
+  }
+
+  async function saveGlobalColors(colors) {
+    try {
+      const data = await api.colors.save(colors);
+      globalColors.value = toColorMap(data?.colors);
+      return true;
+    } catch (err) {
+      error.value = err.message;
+      return false;
+    }
+  }
+
+  function setColorOverride(colors) {
+    config.colors = JSON.parse(JSON.stringify(colors ?? {}));
+  }
+
+  function clearColorOverride() {
+    config.colors = {};
+  }
+
+  function toggleColorsEnabled() {
+    colorsEnabled.value = !colorsEnabled.value;
   }
 
   async function deleteSaved(id) {
@@ -220,7 +280,7 @@ export function useReportBuilder() {
     config,
     () => {
       if (canRun.value) {
-        const nextPayloadJson = JSON.stringify(configToPayload());
+        const nextPayloadJson = JSON.stringify(backendPayload());
         if (nextPayloadJson === lastPayloadJson) return;
         clearTimeout(runTimeout);
         runTimeout = setTimeout(() => {
@@ -243,9 +303,16 @@ export function useReportBuilder() {
     result,
     savedReports,
     config,
+    globalColors,
+    colorsEnabled,
     canRun,
     availableDimensions,
     loadMeta,
+    loadColors,
+    saveGlobalColors,
+    setColorOverride,
+    clearColorOverride,
+    toggleColorsEnabled,
     refreshSaved,
     run,
     downloadXlsx,

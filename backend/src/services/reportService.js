@@ -1,6 +1,6 @@
 import { pool } from '../config/db.js';
 import { ReportSchema } from '../core/ReportSchema.js';
-import { QueryBuilder } from '../core/QueryBuilder.js';
+import { QueryBuilder, ValidationError } from '../core/QueryBuilder.js';
 import { PivotEngine } from '../core/PivotEngine.js';
 import { CsvFormatter } from '../core/CsvFormatter.js';
 
@@ -106,4 +106,82 @@ export async function updateSavedReport(id, { name, config }) {
 export async function deleteSavedReport(id) {
   const result = await pool.query('DELETE FROM saved_reports WHERE id = $1 RETURNING id', [id]);
   return result.rows[0] ?? null;
+}
+
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const MAX_COLOR_RULES = 500;
+
+export function validateColorRules(colors, schema) {
+  if (!Array.isArray(colors)) {
+    throw new ValidationError('Daftar warna harus berupa array.');
+  }
+  if (colors.length > MAX_COLOR_RULES) {
+    throw new ValidationError(`Maksimal ${MAX_COLOR_RULES} aturan warna.`);
+  }
+  return colors.map((item, index) => {
+    const label = `Warna ke-${index + 1}`;
+    if (!item || typeof item !== 'object') {
+      throw new ValidationError(`${label} harus berupa objek.`);
+    }
+    if (!item.field || typeof item.field !== 'string' || !schema.getDimension(item.field)) {
+      throw new ValidationError(`${label}: field tidak dikenal (${item?.field}).`);
+    }
+    if (typeof item.value !== 'string' || !item.value.trim() || item.value.length > 200) {
+      throw new ValidationError(`${label}: nilai kategori tidak valid.`);
+    }
+    if (typeof item.bg !== 'string' || !HEX_COLOR.test(item.bg)) {
+      throw new ValidationError(`${label}: warna latar tidak valid (gunakan hex, mis. #dbeafe).`);
+    }
+    if (item.color != null && (typeof item.color !== 'string' || !HEX_COLOR.test(item.color))) {
+      throw new ValidationError(`${label}: warna teks tidak valid (gunakan hex).`);
+    }
+    return {
+      field: item.field,
+      value: item.value,
+      bg: item.bg,
+      color: item.color ?? '#2f3437',
+    };
+  });
+}
+
+export async function listCategoryColors(db = pool) {
+  const result = await db.query(
+    'SELECT id, field, value, bg, color FROM category_colors ORDER BY field, value',
+  );
+  return result.rows;
+}
+
+export async function replaceCategoryColors(colors, db = pool, schema = reportSchema) {
+  if (schema === reportSchema) await reportSchema.loadFromDatabase();
+  const rules = validateColorRules(colors, schema);
+
+  const statements = [
+    { text: 'DELETE FROM category_colors', params: [] },
+    ...rules.map((rule) => ({
+      text: 'INSERT INTO category_colors (field, value, bg, color) VALUES ($1, $2, $3, $4)',
+      params: [rule.field, rule.value, rule.bg, rule.color],
+    })),
+  ];
+
+  if (typeof db.connect === 'function') {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      for (const statement of statements) {
+        await client.query(statement.text, statement.params);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } else {
+    for (const statement of statements) {
+      await db.query(statement.text, statement.params);
+    }
+  }
+
+  return listCategoryColors(db);
 }

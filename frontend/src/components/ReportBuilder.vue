@@ -5,6 +5,7 @@ import { api } from '../api/client.js';
 import RawDataTable from './RawDataTable.vue';
 import PivotToolbar from './PivotToolbar.vue';
 import FilterDrawer from './FilterDrawer.vue';
+import ColorEditor from './ColorEditor.vue';
 import SaveDrawer from './SaveDrawer.vue';
 import ReportTable from './ReportTable.vue';
 import SavedReports from './SavedReports.vue';
@@ -19,8 +20,15 @@ const {
   result,
   savedReports,
   config,
+  globalColors,
+  colorsEnabled,
   canRun,
   loadMeta,
+  loadColors,
+  saveGlobalColors,
+  setColorOverride,
+  clearColorOverride,
+  toggleColorsEnabled,
   refreshSaved,
   run,
   downloadXlsx,
@@ -47,6 +55,7 @@ const filteredResult = ref(null);
 
 const reportName = ref('');
 const showFilters = ref(false);
+const showColors = ref(false);
 const showSaveModal = ref(false);
 
 async function loadRawSales() {
@@ -84,8 +93,17 @@ function toggleFilters() {
   }
 }
 
+function toggleColors() {
+  showColors.value = !showColors.value;
+}
+
+async function handleSaveGlobalColors(colors) {
+  const ok = await saveGlobalColors(colors);
+  if (ok) showColors.value = false;
+}
+
 onMounted(async () => {
-  await Promise.all([loadMeta(), refreshSaved(), loadRawSales()]);
+  await Promise.all([loadMeta(), refreshSaved(), loadRawSales(), loadColors()]);
   if (canRun.value) {
     await run();
   }
@@ -113,6 +131,7 @@ onMounted(async () => {
         :running="running"
         :has-result="!!result"
         :show-filters="showFilters"
+        :show-colors="showColors"
         @set-row="setRow"
         @remove-row="removeRow"
         @add-row="addRow"
@@ -122,6 +141,7 @@ onMounted(async () => {
         @remove-value="removeValue"
         @add-value="addValue"
         @toggle-filters="toggleFilters"
+        @toggle-colors="toggleColors"
         @export="handleExport"
         @toggle-save="showSaveModal = !showSaveModal"
         @reset="reset"
@@ -136,6 +156,16 @@ onMounted(async () => {
         @add="addFilter"
       />
 
+      <ColorEditor
+        v-if="showColors"
+        :meta="meta"
+        :global-colors="globalColors"
+        :override-colors="config.colors"
+        @save-global="handleSaveGlobalColors"
+        @save-override="setColorOverride"
+        @clear-override="clearColorOverride"
+      />
+
       <SaveDrawer
         v-if="showSaveModal && result"
         v-model="reportName"
@@ -145,7 +175,12 @@ onMounted(async () => {
 
       <!-- Handsontable Spreadsheet View -->
       <div v-if="result" class="sheet-grid-wrapper">
-        <ReportTable :result="result" @filter-change="filteredResult = $event" />
+        <ReportTable
+          :result="result"
+          :colors="{ global: globalColors, override: config.colors, enabled: colorsEnabled }"
+          @filter-change="filteredResult = $event"
+          @toggle-colors="toggleColorsEnabled"
+        />
       </div>
       <div v-else class="sheet-empty">
         <p>Pilih minimal satu baris, kolom, atau nilai untuk menampilkan pivot tabel.</p>

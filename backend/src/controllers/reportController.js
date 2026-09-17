@@ -7,6 +7,8 @@ import {
   createSavedReport,
   updateSavedReport,
   deleteSavedReport,
+  listCategoryColors,
+  replaceCategoryColors,
   reportSchema,
 } from '../services/reportService.js';
 import { ValidationError, QueryBuilder } from '../core/QueryBuilder.js';
@@ -88,4 +90,14 @@ export const savedDeleteHandler = wrap(async (req, res) => {
     return res.status(404).json({ error: 'Laporan tersimpan tidak ditemukan.' });
   }
   res.status(204).send();
+});
+
+export const colorsListHandler = wrap(async (_req, res) => {
+  const colors = await listCategoryColors();
+  res.json({ colors });
+});
+
+export const colorsSaveHandler = wrap(async (req, res) => {
+  const colors = await replaceCategoryColors(req.body?.colors);
+  res.json({ colors });
 });

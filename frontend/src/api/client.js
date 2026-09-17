@@ -44,4 +44,9 @@ export const api = {
     update: (id, payload) => request(`/reports/saved/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
     remove: (id) => request(`/reports/saved/${id}`, { method: 'DELETE' }),
   },
+
+  colors: {
+    list: () => request('/colors'),
+    save: (colors) => request('/colors', { method: 'PUT', body: JSON.stringify({ colors }) }),
+  },
 };

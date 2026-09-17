@@ -8,6 +8,8 @@ import {
   savedCreateHandler,
   savedUpdateHandler,
   savedDeleteHandler,
+  colorsListHandler,
+  colorsSaveHandler,
 } from '../controllers/reportController.js';
 
 import salesRouter from './sales.js';
@@ -30,5 +32,8 @@ router.post('/reports/saved', savedCreateHandler);
 router.get('/reports/saved/:id', savedGetHandler);
 router.put('/reports/saved/:id', savedUpdateHandler);
 router.delete('/reports/saved/:id', savedDeleteHandler);
+
+router.get('/colors', colorsListHandler);
+router.put('/colors', colorsSaveHandler);
 
 export default router;

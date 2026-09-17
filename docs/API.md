@@ -310,6 +310,26 @@ Konfigurasi laporan dapat disimpan, dimuat, diubah, dan dihapus.
 
 **DELETE `/api/reports/saved/:id`** — hapus. `204` bila berhasil, `404` bila tidak ada.
 
+### Warna Kategori
+
+Aturan warna kategori global tersimpan di database dan berlaku di semua laporan.
+Tiap laporan tersimpan boleh menimpanya lewat `config.colors` (tanpa migrasi tambahan).
+
+**GET `/api/colors`** — daftar aturan warna global (urut field, value).
+
+```json
+{ "colors": [{ "id": 1, "field": "city", "value": "Jakarta", "bg": "#dbeafe", "color": "#1e3a8a" }] }
+```
+
+**PUT `/api/colors`** — ganti seluruh aturan sekaligus (replace-all, atomik).
+
+```json
+{ "colors": [{ "field": "city", "value": "Jakarta", "bg": "#dbeafe", "color": "#1e3a8a" }] }
+```
+
+**Response `200`:** daftar segar `{ "colors": [...] }`. Validasi gagal (`field` tak dikenal,
+nilai kosong, warna bukan hex `#rgb`/`#rrggbb`) → `400` dan data lama utuh.
+
 ---
 
 ### POST `/api/sales`
