@@ -1,6 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildReportQuery, validateConfig, ValidationError } from '../src/core/reportBuilder.js';
+import { QueryBuilder, ValidationError } from '../src/core/QueryBuilder.js';
+import { ReportSchema } from '../src/core/ReportSchema.js';
+
+const schema = new ReportSchema();
+const queryBuilder = new QueryBuilder(schema);
+
+const validateConfig = (config) => queryBuilder.validateConfig(config);
+const buildReportQuery = (config) => queryBuilder.build(config);
 
 const SUM_AMOUNT = { field: 'amount', aggregation: 'sum' };
 

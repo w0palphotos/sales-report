@@ -1,11 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { pivotReport } from '../src/core/pivot.js';
-import { buildCsv } from '../src/core/csv.js';
+import { PivotEngine } from '../src/core/PivotEngine.js';
+import { CsvFormatter } from '../src/core/CsvFormatter.js';
+import { ReportSchema } from '../src/core/ReportSchema.js';
 import { TRANSACTIONS, buildDbRows } from './helpers.js';
 
+const schema = new ReportSchema();
+const engine = new PivotEngine(schema);
+
 const render = (config, transactions = TRANSACTIONS) =>
-  buildCsv(pivotReport(buildDbRows(transactions, config), config));
+  CsvFormatter.format(engine.pivot(buildDbRows(transactions, config), config));
 
 describe('buildCsv', () => {
   it('Contoh 1: header + baris + total (tanpa kolom)', () => {

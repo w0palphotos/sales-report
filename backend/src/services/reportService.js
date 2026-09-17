@@ -1,18 +1,24 @@
 import { pool } from '../config/db.js';
-import { DIMENSIONS, MEASURES, AGGREGATIONS, OPERATORS } from '../core/whitelist.js';
-import { buildReportQuery } from '../core/reportBuilder.js';
-import { pivotReport } from '../core/pivot.js';
-import { buildCsv } from '../core/csv.js';
+import { ReportSchema } from '../core/ReportSchema.js';
+import { QueryBuilder } from '../core/QueryBuilder.js';
+import { PivotEngine } from '../core/PivotEngine.js';
+import { CsvFormatter } from '../core/CsvFormatter.js';
+
+export const reportSchema = new ReportSchema(pool);
 
 export async function runReport(config) {
-  const { sql, params } = buildReportQuery(config);
+  await reportSchema.loadFromDatabase();
+  const queryBuilder = new QueryBuilder(reportSchema);
+  const { sql, params } = queryBuilder.build(config);
+
   const result = await pool.query(sql, params);
-  return pivotReport(result.rows, config);
+  const pivotEngine = new PivotEngine(reportSchema);
+  return pivotEngine.pivot(result.rows, config);
 }
 
 export async function exportCsv(config) {
   const report = await runReport(config);
-  return buildCsv(report);
+  return CsvFormatter.format(report);
 }
 
 const DIMENSION_QUERY = {
@@ -23,8 +29,10 @@ const DIMENSION_QUERY = {
 };
 
 export async function getMeta() {
+  await reportSchema.loadFromDatabase();
+
   const values = {};
-  for (const [key, dim] of Object.entries(DIMENSIONS)) {
+  for (const [key] of reportSchema.dimensions.entries()) {
     if (DIMENSION_QUERY[key]) {
       try {
         const result = await pool.query(DIMENSION_QUERY[key]);
@@ -38,23 +46,23 @@ export async function getMeta() {
   }
 
   return {
-    dimensions: Object.entries(DIMENSIONS).map(([key, dim]) => ({
+    dimensions: Array.from(reportSchema.dimensions.entries()).map(([key, dim]) => ({
       key,
       label: dim.label,
       type: dim.type,
-      values: values[key],
+      values: values[key] ?? [],
     })),
-    measures: Object.entries(MEASURES).map(([key, measure]) => ({
+    measures: Array.from(reportSchema.measures.entries()).map(([key, measure]) => ({
       key,
       label: measure.label,
       type: measure.type,
     })),
-    aggregations: Object.entries(AGGREGATIONS).map(([key, aggregation]) => ({
+    aggregations: Array.from(reportSchema.aggregations.entries()).map(([key, aggregation]) => ({
       key,
       label: aggregation.label,
       allowedTypes: aggregation.allowedTypes,
     })),
-    operators: Object.entries(OPERATORS).map(([key, operator]) => ({
+    operators: Array.from(reportSchema.operators.entries()).map(([key, operator]) => ({
       key,
       label: operator.label,
       argCount: operator.argCount,
