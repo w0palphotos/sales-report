@@ -1,9 +1,9 @@
 import { computed } from 'vue';
 
 export function usePivotGrid(resultSource) {
-  const rowFields = computed(() => resultSource.value?.meta.rowFields ?? []);
-  const columnField = computed(() => resultSource.value?.meta.columnField ?? null);
-  const valueColumns = computed(() => resultSource.value?.meta.valueColumns ?? []);
+  const rowFields = computed(() => resultSource.value?.meta?.rowFields ?? []);
+  const columnField = computed(() => resultSource.value?.meta?.columnField ?? null);
+  const valueColumns = computed(() => resultSource.value?.meta?.valueColumns ?? []);
   const columnKeys = computed(() => resultSource.value?.columnKeys ?? []);
   const columnTotals = computed(() => resultSource.value?.columnTotals ?? {});
   const grandTotal = computed(() => resultSource.value?.grandTotal ?? []);
@@ -23,7 +23,8 @@ export function usePivotGrid(resultSource) {
         { label: 'Grand Total', colspan: Math.max(1, vals.length) },
       ];
       const bottomRow = [
-        ...cols.flatMap(() => vals.length ? vals.map((v) => v.label) : ['']),
+        ...rows.map(() => ''),
+        ...cols.flatMap(() => (vals.length ? vals.map((v) => v.label) : [''])),
         ...(vals.length ? vals.map((v) => v.label) : ['']),
       ];
       return [topRow, bottomRow];
@@ -42,6 +43,7 @@ export function usePivotGrid(resultSource) {
     const data = [];
     const rFields = rowFields.value;
     const cKeys = columnKeys.value;
+    const vals = valueColumns.value;
     const hasCol = Boolean(columnField.value);
 
     // Data rows
@@ -53,12 +55,20 @@ export function usePivotGrid(resultSource) {
       if (hasCol) {
         for (const ck of cKeys) {
           const cellVals = row.cells[ck] ?? [];
-          for (const val of cellVals) {
-            rowArr.push(val);
+          if (vals.length === 0) {
+            rowArr.push('');
+          } else {
+            for (const val of cellVals) {
+              rowArr.push(val);
+            }
           }
         }
-        for (const val of row.rowTotal ?? []) {
-          rowArr.push(val);
+        if (vals.length === 0) {
+          rowArr.push('');
+        } else {
+          for (const val of row.rowTotal ?? []) {
+            rowArr.push(val);
+          }
         }
       } else {
         for (const val of row.cells['__all__'] ?? []) {
@@ -68,27 +78,37 @@ export function usePivotGrid(resultSource) {
       data.push(rowArr);
     }
 
-    // Total footer row
-    const totalRow = [];
-    rFields.forEach((_, i) => {
-      totalRow.push(i === 0 ? 'Grand Total' : '');
-    });
-    if (hasCol) {
-      for (const ck of cKeys) {
-        const colTot = columnTotals.value[ck] ?? [];
-        for (const val of colTot) {
+    // Total footer row (only shown if there is at least one row dimension)
+    if (rFields.length > 0) {
+      const totalRow = [];
+      rFields.forEach((_, i) => {
+        totalRow.push(i === 0 ? 'Grand Total' : '');
+      });
+      if (hasCol) {
+        for (const ck of cKeys) {
+          const colTot = columnTotals.value[ck] ?? [];
+          if (vals.length === 0) {
+            totalRow.push('');
+          } else {
+            for (const val of colTot) {
+              totalRow.push(val);
+            }
+          }
+        }
+        if (vals.length === 0) {
+          totalRow.push('');
+        } else {
+          for (const val of grandTotal.value) {
+            totalRow.push(val);
+          }
+        }
+      } else {
+        for (const val of grandTotal.value) {
           totalRow.push(val);
         }
       }
-      for (const val of grandTotal.value) {
-        totalRow.push(val);
-      }
-    } else {
-      for (const val of grandTotal.value) {
-        totalRow.push(val);
-      }
+      data.push(totalRow);
     }
-    data.push(totalRow);
 
     return data;
   });

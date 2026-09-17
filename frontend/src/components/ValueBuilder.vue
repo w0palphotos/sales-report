@@ -58,7 +58,6 @@ function onFieldChange(event) {
       </option>
     </select>
     <button
-      v-if="index > 0"
       type="button"
       class="chip-remove"
       :aria-label="`Hapus nilai ${index + 1}`"

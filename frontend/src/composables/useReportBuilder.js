@@ -11,9 +11,9 @@ export function useReportBuilder() {
   const savedReports = ref([]);
 
   const config = reactive({
-    rows: ['sales_name'],
+    rows: [],
     columns: [],
-    values: [{ field: 'amount', aggregation: 'sum' }],
+    values: [],
     filters: [],
   });
 
@@ -63,7 +63,8 @@ export function useReportBuilder() {
 
   async function run() {
     if (!canRun.value) {
-      error.value = 'Pilih minimal satu baris dan satu nilai.';
+      result.value = null;
+      lastPayloadJson = null;
       return;
     }
     running.value = true;
@@ -104,12 +105,13 @@ export function useReportBuilder() {
   }
 
   function reset() {
-    config.rows = ['sales_name'];
+    config.rows = [];
     config.columns = [];
-    config.values = [{ field: 'amount', aggregation: 'sum' }];
+    config.values = [];
     config.filters = [];
     result.value = null;
     error.value = null;
+    lastPayloadJson = null;
   }
 
   function addRow() {
@@ -140,7 +142,8 @@ export function useReportBuilder() {
 
   function addValue() {
     if (config.values.length >= 3) return;
-    config.values.push({ field: 'amount', aggregation: 'sum' });
+    const defaultMeasure = meta.value?.measures?.[0]?.key || 'amount';
+    config.values.push({ field: defaultMeasure, aggregation: 'sum' });
   }
 
   function updateValue(index, patch) {
@@ -213,9 +216,13 @@ export function useReportBuilder() {
         runTimeout = setTimeout(() => {
           run();
         }, 300);
+      } else {
+        clearTimeout(runTimeout);
+        result.value = null;
+        lastPayloadJson = null;
       }
     },
-    { deep: true }
+    { deep: true },
   );
 
   return {

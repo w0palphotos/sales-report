@@ -24,7 +24,7 @@ const { rowDimCount, nestedHeaders, tableData, getVisibleResult } = usePivotGrid
 function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
   Handsontable.renderers.TextRenderer.apply(this, arguments);
   const totalRowIndex = instance.countRows() - 1;
-  const isTotalRow = row === totalRowIndex;
+  const isTotalRow = rowDimCount.value > 0 && row === totalRowIndex;
   const isValueCol = col >= rowDimCount.value;
 
   if (isValueCol && typeof value === 'number') {
@@ -71,8 +71,8 @@ const hotSettings = computed(() => ({
   licenseKey: 'non-commercial-and-evaluation',
   renderer: cellRenderer,
   columnSorting: true,
-  dropdownMenu: true,
-  filters: true,
+  dropdownMenu: false,
+  filters: false,
   hiddenColumns: { indicators: true },
   hiddenRows: { indicators: true },
   contextMenu: ['hidden_columns_show', 'hidden_columns_hide'],

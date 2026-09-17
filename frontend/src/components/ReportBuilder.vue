@@ -87,7 +87,6 @@ function toggleFilters() {
 onMounted(async () => {
   await Promise.all([loadMeta(), refreshSaved(), loadRawSales()]);
   if (canRun.value) {
-    // ponytail: auto-run default report on mount so spreadsheet renders directly
     await run();
   }
 });
@@ -107,7 +106,7 @@ onMounted(async () => {
     </div>
 
     <!-- 2. Pivot Table Card with Integrated Controls -->
-    <section v-else-if="result" class="spreadsheet-card card">
+    <section v-else-if="meta" class="spreadsheet-card card">
       <PivotToolbar
         :config="config"
         :meta="meta"
@@ -145,13 +144,19 @@ onMounted(async () => {
       />
 
       <!-- Handsontable Spreadsheet View -->
-      <div class="sheet-grid-wrapper">
+      <div v-if="result" class="sheet-grid-wrapper">
         <ReportTable :result="result" @filter-change="filteredResult = $event" />
+      </div>
+      <div v-else class="sheet-empty">
+        <p>Pilih minimal satu baris, kolom, atau nilai untuk menampilkan pivot tabel.</p>
       </div>
     </section>
 
     <!-- 3. Visualization Card -->
-    <section v-if="result" class="chart-card card">
+    <section
+      v-if="result && (result.rows?.length > 0 || (filteredResult && filteredResult.rows?.length > 0))"
+      class="chart-card card"
+    >
       <h3 class="chart-title">Visualisasi</h3>
       <Suspense>
         <BarChart :result="filteredResult || result" />
@@ -190,6 +195,13 @@ onMounted(async () => {
 
 .sheet-grid-wrapper {
   padding: 12px;
+}
+
+.sheet-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted, #787774);
+  font-size: 14px;
 }
 
 .chart-card {

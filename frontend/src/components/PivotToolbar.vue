@@ -63,7 +63,6 @@ const columnOptionsFor = () =>
             @update:model-value="emit('set-row', index, $event)"
           />
           <button
-            v-if="config.rows.length > 1"
             type="button"
             class="chip-remove"
             :aria-label="`Hapus baris ${index + 1}`"
