@@ -22,40 +22,23 @@ const field = computed(() => {
 
 const fieldValues = computed(() => field.value?.values ?? []);
 
-const availableOperators = computed(() => {
-  if (!field.value) return [];
-  const isNumber = field.value.type === 'number';
-  return (props.meta?.operators ?? []).filter((operator) =>
-    isNumber ? !operator.textOnly : !operator.numberOnly,
-  );
-});
+// Operator implisit '=' untuk semua filter; tidak ada lagi dropdown operator.
+// Peninggalan 'between' (value array) dinormalisasi ke nilai tunggal.
+const singleValue = computed(() =>
+  Array.isArray(props.filter.value) ? (props.filter.value[0] ?? '') : props.filter.value,
+);
 
 function patch(patchObject) {
   emit('update', patchObject);
 }
 
 function onFieldChange(event) {
-  const key = event.target.value;
-  const nextField =
-    (props.meta?.dimensions ?? []).find((dimension) => dimension.key === key) ??
-    (props.meta?.measures ?? []).find((measure) => measure.key === key);
-  const operator = nextField?.type === 'number' ? '=' : '=';
-  patch({ field: key, operator, value: nextField?.type === 'number' ? '' : '' });
-}
-
-function onOperatorChange(event) {
-  const operator = event.target.value;
-  if (operator === 'between') {
-    const current = Array.isArray(props.filter.value) ? props.filter.value[0] : '';
-    patch({ operator, value: [current, ''] });
-  } else {
-    patch({ operator, value: Array.isArray(props.filter.value) ? '' : props.filter.value });
-  }
+  patch({ field: event.target.value, value: '' });
 }
 </script>
 
 <template>
-  <div class="filter-row" :class="{ 'is-between': filter.operator === 'between' }">
+  <div class="filter-row">
     <select :value="filter.field" @change="onFieldChange">
       <option value="" disabled>Field</option>
       <option v-for="dimension in meta?.dimensions ?? []" :key="dimension.key" :value="dimension.key">
@@ -66,35 +49,9 @@ function onOperatorChange(event) {
       </option>
     </select>
 
-    <select :value="filter.operator" @change="onOperatorChange">
-      <option value="" disabled>Operator</option>
-      <option v-for="operator in availableOperators" :key="operator.key" :value="operator.key">
-        {{ operator.label }}
-      </option>
-    </select>
-
-    <template v-if="filter.operator === 'between'">
-      <input
-        type="number"
-        :value="Array.isArray(filter.value) ? filter.value[0] : ''"
-        placeholder="Minimal"
-        @input="
-          patch({ value: [toNumber($event.target.value), toNumber(Array.isArray(filter.value) ? filter.value[1] : '')] })
-        "
-      />
-      <input
-        type="number"
-        :value="Array.isArray(filter.value) ? filter.value[1] : ''"
-        placeholder="Maksimal"
-        @input="
-          patch({ value: [toNumber(Array.isArray(filter.value) ? filter.value[0] : ''), toNumber($event.target.value)] })
-        "
-      />
-    </template>
-
     <select
-      v-else-if="field?.type === 'text' && (filter.operator === '=' || filter.operator === '!=')"
-      :value="filter.value"
+      v-if="field?.type === 'text' && fieldValues.length > 0"
+      :value="singleValue"
       @change="patch({ value: $event.target.value })"
     >
       <option value="" disabled>Pilih nilai</option>
@@ -104,7 +61,7 @@ function onOperatorChange(event) {
     <input
       v-else-if="field?.type === 'text'"
       type="text"
-      :value="filter.value"
+      :value="singleValue"
       placeholder="Teks"
       @input="patch({ value: $event.target.value })"
     />
@@ -112,7 +69,7 @@ function onOperatorChange(event) {
     <input
       v-else
       type="number"
-      :value="filter.value"
+      :value="singleValue"
       placeholder="Angka"
       @input="patch({ value: toNumber($event.target.value) })"
     />
@@ -126,12 +83,8 @@ function onOperatorChange(event) {
 <style scoped>
 .filter-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr auto;
+  grid-template-columns: 1fr 1.2fr auto;
   gap: 8px;
   align-items: end;
-}
-
-.filter-row.is-between {
-  grid-template-columns: 1fr 1fr 1fr 1fr auto;
 }
 </style>

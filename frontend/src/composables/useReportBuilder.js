@@ -25,13 +25,19 @@ export function useReportBuilder() {
     (meta.value?.dimensions ?? []).filter((dimension) => !usedRowFields.value.has(dimension.key)),
   );
 
+  // Operator implisit '=': UI tidak lagi menampilkan pilihan operator,
+  // tapi payload tetap menyertakannya agar validasi backend lolos apa adanya.
   const configToPayload = () => ({
     rows: [...config.rows],
     columns: [...config.columns],
     values: config.values.map((value) => ({ field: value.field, aggregation: value.aggregation })),
     filters: config.filters
-      .filter((filter) => filter.field && filter.operator && hasValidValue(filter))
-      .map((filter) => ({ ...filter, value: Array.isArray(filter.value) ? [...filter.value] : filter.value })),
+      .filter((filter) => filter.field && hasValidValue(filter))
+      .map((filter) => ({
+        field: filter.field,
+        operator: '=',
+        value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : filter.value,
+      })),
   });
 
   const hasValidValue = (filter) => {
@@ -155,7 +161,7 @@ export function useReportBuilder() {
   }
 
   function addFilter() {
-    config.filters.push({ field: '', operator: '', value: '' });
+    config.filters.push({ field: '', value: '' });
   }
 
   function updateFilter(index, patch) {
@@ -190,7 +196,11 @@ export function useReportBuilder() {
       rows: report.config.rows ?? [],
       columns: report.config.columns ?? [],
       values: report.config.values ?? [],
-      filters: report.config.filters ?? [],
+      // Normalisasi laporan lama: buang operator, satukan nilai 'between'.
+      filters: (report.config.filters ?? []).map((filter) => ({
+        field: filter.field ?? '',
+        value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : (filter.value ?? ''),
+      })),
     });
     result.value = null;
     error.value = null;
