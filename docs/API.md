@@ -330,6 +330,26 @@ Tiap laporan tersimpan boleh menimpanya lewat `config.colors` (tanpa migrasi tam
 **Response `200`:** daftar segar `{ "colors": [...] }`. Validasi gagal (`field` tak dikenal,
 nilai kosong, warna bukan hex `#rgb`/`#rrggbb`) → `400` dan data lama utuh.
 
+### Gaya Tabel (baris & dimensi)
+
+Aturan posisional untuk mewarnai baris atau kolom tabel: `kind` = `row` (satu baris
+data, `key` = signature isi baris) atau `column` (`key` = `col:<field>:<nilai>`,
+`rowdim:<field>`, atau `val:<field>:<agregasi>`).
+
+**GET `/api/table-styles`** — daftar aturan (urut kind, key).
+
+```json
+{ "styles": [{ "id": 1, "kind": "row", "key": "sales_name=Andi", "bg": "#ff0000", "color": "#ffffff" }] }
+```
+
+**PUT `/api/table-styles`** — ganti seluruh aturan sekaligus (replace-all, atomik).
+
+```json
+{ "styles": [{ "kind": "row", "key": "sales_name=Andi", "bg": "#ff0000", "color": "#ffffff" }] }
+```
+
+**Response `200`:** daftar segar `{ "styles": [...] }`. Validasi gagal → `400` dan data lama utuh.
+
 ---
 
 ### POST `/api/sales`

@@ -9,6 +9,8 @@ import {
   deleteSavedReport,
   listCategoryColors,
   replaceCategoryColors,
+  listTableStyles,
+  replaceTableStyles,
   reportSchema,
 } from '../services/reportService.js';
 import { ValidationError, QueryBuilder } from '../core/QueryBuilder.js';
@@ -100,4 +102,14 @@ export const colorsListHandler = wrap(async (_req, res) => {
 export const colorsSaveHandler = wrap(async (req, res) => {
   const colors = await replaceCategoryColors(req.body?.colors);
   res.json({ colors });
+});
+
+export const stylesListHandler = wrap(async (_req, res) => {
+  const styles = await listTableStyles();
+  res.json({ styles });
+});
+
+export const stylesSaveHandler = wrap(async (req, res) => {
+  const styles = await replaceTableStyles(req.body?.styles);
+  res.json({ styles });
 });

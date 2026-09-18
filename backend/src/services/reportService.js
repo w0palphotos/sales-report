@@ -185,3 +185,102 @@ export async function replaceCategoryColors(colors, db = pool, schema = reportSc
 
   return listCategoryColors(db);
 }
+
+const MAX_TABLE_STYLES = 500;
+
+export function validateTableStyles(styles, schema) {
+  if (!Array.isArray(styles)) {
+    throw new ValidationError('Daftar gaya tabel harus berupa array.');
+  }
+  if (styles.length > MAX_TABLE_STYLES) {
+    throw new ValidationError(`Maksimal ${MAX_TABLE_STYLES} aturan gaya tabel.`);
+  }
+  return styles.map((item, index) => {
+    const label = `Gaya ke-${index + 1}`;
+    if (!item || typeof item !== 'object') {
+      throw new ValidationError(`${label} harus berupa objek.`);
+    }
+    if (item.kind !== 'row' && item.kind !== 'column') {
+      throw new ValidationError(`${label}: kind harus "row" atau "column".`);
+    }
+    if (typeof item.key !== 'string' || !item.key.trim() || item.key.length > 500) {
+      throw new ValidationError(`${label}: kunci tidak valid.`);
+    }
+    if (item.kind === 'column' && !isKnownColumnKey(item.key, schema)) {
+      throw new ValidationError(`${label}: kunci kolom tidak dikenal (${item.key}).`);
+    }
+    if (typeof item.bg !== 'string' || !HEX_COLOR.test(item.bg)) {
+      throw new ValidationError(`${label}: warna latar tidak valid (gunakan hex, mis. #dbeafe).`);
+    }
+    if (item.color != null && (typeof item.color !== 'string' || !HEX_COLOR.test(item.color))) {
+      throw new ValidationError(`${label}: warna teks tidak valid (gunakan hex).`);
+    }
+    return {
+      kind: item.kind,
+      key: item.key,
+      bg: item.bg,
+      color: item.color ?? '#2f3437',
+    };
+  });
+}
+
+function isKnownColumnKey(key, schema) {
+  if (key.startsWith('rowdim:')) {
+    return Boolean(schema.getDimension(key.slice(7)));
+  }
+  if (key.startsWith('col:')) {
+    const rest = key.slice(4);
+    const sep = rest.indexOf(':');
+    if (sep < 1) return false;
+    const field = rest.slice(0, sep);
+    const value = rest.slice(sep + 1);
+    return Boolean(schema.getDimension(field)) && value.length > 0 && value.length <= 200;
+  }
+  if (key.startsWith('val:')) {
+    const [, field, aggregation] = key.split(':');
+    return Boolean(schema.getMeasure(field)) && Boolean(schema.getAggregation(aggregation));
+  }
+  return false;
+}
+
+export async function listTableStyles(db = pool) {
+  const result = await db.query(
+    'SELECT id, kind, key, bg, color FROM table_styles ORDER BY kind, key',
+  );
+  return result.rows;
+}
+
+export async function replaceTableStyles(styles, db = pool, schema = reportSchema) {
+  if (schema === reportSchema) await reportSchema.loadFromDatabase();
+  const rules = validateTableStyles(styles, schema);
+
+  const statements = [
+    { text: 'DELETE FROM table_styles', params: [] },
+    ...rules.map((rule) => ({
+      text: 'INSERT INTO table_styles (kind, key, bg, color) VALUES ($1, $2, $3, $4)',
+      params: [rule.kind, rule.key, rule.bg, rule.color],
+    })),
+  ];
+
+  if (typeof db.connect === 'function') {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      for (const statement of statements) {
+        await client.query(statement.text, statement.params);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } else {
+    for (const statement of statements) {
+      await db.query(statement.text, statement.params);
+    }
+  }
+
+  return listTableStyles(db);
+}

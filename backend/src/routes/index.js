@@ -10,6 +10,8 @@ import {
   savedDeleteHandler,
   colorsListHandler,
   colorsSaveHandler,
+  stylesListHandler,
+  stylesSaveHandler,
 } from '../controllers/reportController.js';
 
 import salesRouter from './sales.js';
@@ -35,5 +37,8 @@ router.delete('/reports/saved/:id', savedDeleteHandler);
 
 router.get('/colors', colorsListHandler);
 router.put('/colors', colorsSaveHandler);
+
+router.get('/table-styles', stylesListHandler);
+router.put('/table-styles', stylesSaveHandler);
 
 export default router;
