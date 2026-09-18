@@ -9,7 +9,6 @@ const props = defineProps({
   running: { type: Boolean, default: false },
   hasResult: { type: Boolean, default: false },
   showFilters: { type: Boolean, default: false },
-  showColors: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -22,7 +21,6 @@ const emit = defineEmits([
   'remove-value',
   'add-value',
   'toggle-filters',
-  'toggle-colors',
   'export',
   'toggle-save',
   'reset',
@@ -145,14 +143,6 @@ const columnOptionsFor = () =>
         @click="emit('toggle-filters')"
       >
         Filter {{ config.filters.length > 0 ? `(${config.filters.length})` : '' }}
-      </button>
-      <button
-        type="button"
-        class="btn btn-ghost btn-small"
-        :class="{ active: showColors }"
-        @click="emit('toggle-colors')"
-      >
-        Warna
       </button>
       <button
         type="button"

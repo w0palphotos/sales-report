@@ -49,8 +49,71 @@ export function resolveColor(field, value, { global = {}, override = {} } = {}) 
   return override?.[field]?.[key] ?? global?.[field]?.[key] ?? null;
 }
 
+// Kebalikan toColorMap di composable: peta -> array untuk PUT /colors.
+export function colorMapToArray(map) {
+  const out = [];
+  for (const [field, vals] of Object.entries(map ?? {})) {
+    for (const [value, rule] of Object.entries(vals ?? {})) {
+      if (rule?.bg) out.push({ field, value, bg: rule.bg, color: rule.color ?? DEFAULT_TEXT });
+    }
+  }
+  return out;
+}
+
+// Signature stabil satu baris data (tahan terhadap sort; yatim bila konfigurasi berubah).
+export function rowSignature(rowKey, rowFields) {
+  return (rowFields ?? [])
+    .map((rf) => {
+      const key = typeof rf === 'string' ? rf : rf.key;
+      return `${key}=${rowKey?.[key] ?? ''}`;
+    })
+    .join('|');
+}
+
+export function styleKey(kind, key) {
+  return `${kind}:${key}`;
+}
+
+// Aturan posisional { "<kind>:<key>": { kind, key, bg, color } }; override menang.
+export function resolveTableStyle(kind, key, { global = {}, override = {} } = {}) {
+  if (key == null) return null;
+  const k = styleKey(kind, key);
+  return override?.[k] ?? global?.[k] ?? null;
+}
+
+export function tableStylesToArray(map) {
+  return Object.values(map ?? {}).filter(
+    (rule) => rule && (rule.kind === 'row' || rule.kind === 'column') && rule.key != null && rule.bg,
+  );
+}
+
+export function tableStylesToMap(list) {
+  const map = {};
+  for (const item of list ?? []) {
+    if (!item || (item.kind !== 'row' && item.kind !== 'column') || item.key == null) continue;
+    map[styleKey(item.kind, item.key)] = {
+      kind: item.kind,
+      key: item.key,
+      bg: item.bg,
+      color: item.color ?? DEFAULT_TEXT,
+    };
+  }
+  return map;
+}
+
 // Terapkan hasil build() ke sel Handsontable.
 export function applyBuiltStyle(td, built) {
   td.innerText = built.text;
-  Object.assign(td.style, built.style);
+  paintCell(td, built.style);
+}
+
+// Sheet kita readOnly sehingga semua sel membawa kelas `htDimmed`, yang
+// divonis background/color !important oleh CSS bawaan Handsontable.
+// Satu-satunya cara menang: setProperty dengan prioritas important;
+// reset via removeProperty agar kembali ke tema.
+export function paintCell(td, { background = null, color = null } = {}) {
+  if (background) td.style.setProperty('background-color', background, 'important');
+  else td.style.removeProperty('background-color');
+  if (color) td.style.setProperty('color', color, 'important');
+  else td.style.removeProperty('color');
 }

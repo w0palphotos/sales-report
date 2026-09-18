@@ -11,11 +11,14 @@ import {
   LinearScale,
 } from 'chart.js';
 import { formatCompact } from '../utils/format.js';
+import { resolveColor, resolveTableStyle, rowSignature } from '../utils/cellStyle.js';
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 const props = defineProps({
   result: { type: Object, required: true },
+  colors: { type: Object, default: () => ({ global: {}, override: {} }) },
+  tableStyles: { type: Object, default: () => ({ global: {}, override: {} }) },
 });
 
 const ALL = '__all__';
@@ -41,6 +44,33 @@ const labels = computed(() =>
 
 const palette = ['#2f3437', '#1f6c9f', '#346538', '#956400', '#9f2f2d', '#787774'];
 
+function seriesColor(columnKey, fallback) {
+  if (!columnField.value) return fallback;
+  const rule = resolveColor(columnField.value.key, columnKey, props.colors ?? {});
+  if (rule?.bg) return rule.bg;
+  const styles = props.tableStyles ?? {};
+  const cs = resolveTableStyle(
+    'column',
+    `col:${columnField.value.key}:${columnKey}`,
+    styles,
+  );
+  return cs?.bg ?? fallback;
+}
+
+// Tiap bar: kategori penuh dulu, lalu aturan baris, lalu fallback.
+function barColorForRow(row, fallback) {
+  for (const field of rowFields.value) {
+    const rule = resolveColor(field.key, row.key?.[field.key], props.colors ?? {});
+    if (rule?.bg) return rule.bg;
+  }
+  const rs = resolveTableStyle(
+    'row',
+    rowSignature(row.key, rowFields.value),
+    props.tableStyles ?? {},
+  );
+  return rs?.bg ?? fallback;
+}
+
 const chartData = computed(() => {
   const index = valueIndex.value;
   if (columnField.value) {
@@ -49,7 +79,7 @@ const chartData = computed(() => {
       datasets: columnKeys.value.map((columnKey, i) => ({
         label: columnKey,
         data: rows.value.map((row) => row.cells[columnKey][index]),
-        backgroundColor: palette[i % palette.length],
+        backgroundColor: seriesColor(columnKey, palette[i % palette.length]),
         borderRadius: 2,
         maxBarThickness: 36,
       })),
@@ -61,7 +91,7 @@ const chartData = computed(() => {
       {
         label: valueColumns.value[index]?.label ?? 'Nilai',
         data: rows.value.map((row) => row.cells[ALL][index]),
-        backgroundColor: palette[0],
+        backgroundColor: rows.value.map((row) => barColorForRow(row, palette[0])),
         borderRadius: 2,
         maxBarThickness: 42,
       },

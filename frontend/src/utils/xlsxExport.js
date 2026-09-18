@@ -1,4 +1,5 @@
 import { injectNativeChart } from './xlsxChartXml.js';
+import { resolveColor, resolveTableStyle, rowSignature } from './cellStyle.js';
 
 function colToLetter(index) {
   let temp = index;
@@ -40,6 +41,50 @@ function headerStyle() {
   };
 }
 
+function hexToArgb(hex) {
+  let digits = String(hex ?? '').trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(digits)) digits = digits.split('').map((c) => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(digits)) return null;
+  return `FF${digits.toUpperCase()}`;
+}
+
+function fillFor(hex) {
+  const argb = hexToArgb(hex);
+  return argb ? { type: 'pattern', pattern: 'solid', fgColor: { argb } } : null;
+}
+
+// Tint baris: warna persis aturan pertama yang cocok di antara field baris.
+function rowTintHex(pivotRow, layout, colors) {
+  for (const rf of layout.rowFields) {
+    const rule = resolveColor(rf.key, pivotRow.key?.[rf.key], colors);
+    if (rule?.bg) return rule.bg;
+  }
+  return null;
+}
+
+function columnTintHex(ck, layout, colors) {
+  if (!layout.columnField || ck == null) return null;
+  const rule = resolveColor(layout.columnField.key, ck, colors);
+  return rule?.bg ?? null;
+}
+
+function rowStyleHex(pivotRow, layout, styles) {
+  return resolveTableStyle('row', rowSignature(pivotRow.key, layout.rowFields), styles)?.bg ?? null;
+}
+
+function valueColumnStyleHex(ck, vIdx, layout, styles) {
+  if (ck != null && layout.columnField) {
+    const gs = resolveTableStyle('column', `col:${layout.columnField.key}:${ck}`, styles);
+    if (gs?.bg) return gs;
+  }
+  const vc = layout.valueColumns[vIdx];
+  if (vc) {
+    const vs = resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles);
+    if (vs?.bg) return vs;
+  }
+  return null;
+}
+
 function borderStyle() {
   const thin = { style: 'thin', color: { argb: 'FFE5E5E3' } };
   return { top: thin, left: thin, bottom: thin, right: thin };
@@ -71,7 +116,7 @@ function applyGridStyle(ws, colWidth) {
   });
 }
 
-function addPivotHeaders(ws, layout) {
+function addPivotHeaders(ws, layout, colors = {}, styles = {}) {
   const { rowFields, valueColumns, columnKeys, hasCol, valCount } = layout;
 
   if (!hasCol) {
@@ -109,6 +154,47 @@ function addPivotHeaders(ws, layout) {
     offset += Math.max(1, valCount);
   }
   if (valCount > 1) ws.mergeCells(`${colToLetter(offset)}1:${colToLetter(offset + valCount - 1)}1`);
+
+  // Tint sel grup kolom yang cocok (baris header atas, sel master merge).
+  if (hasCol) {
+    const topRow = ws.getRow(1);
+    rowFields.forEach((rf, i) => {
+      const ds = resolveTableStyle('column', `rowdim:${rf.key}`, styles);
+      const fill = fillFor(ds?.bg);
+      if (fill) topRow.getCell(i + 1).fill = fill;
+    });
+    let pos = rowFields.length + 1; // 1-based
+    for (const ck of columnKeys) {
+      const style =
+        resolveTableStyle('column', `col:${layout.columnField.key}:${ck}`, styles) ?? null;
+      const fill = fillFor(style?.bg ?? columnTintHex(ck, layout, colors));
+      if (fill) topRow.getCell(pos).fill = fill;
+      pos += Math.max(1, valCount);
+    }
+    // Sub-header measure (baris 2, Grand Total dikecualikan).
+    const subRow = ws.getRow(2);
+    for (let g = 0; g < columnKeys.length; g++) {
+      for (let v = 0; v < Math.max(1, valCount); v++) {
+        const vc = valueColumns[v];
+        if (!vc) continue;
+        const vs = resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles);
+        const fill = fillFor(vs?.bg);
+        if (fill) subRow.getCell(rowFields.length + 1 + g * Math.max(1, valCount) + v).fill = fill;
+      }
+    }
+  } else {
+    const headRow = ws.getRow(1);
+    rowFields.forEach((rf, i) => {
+      const ds = resolveTableStyle('column', `rowdim:${rf.key}`, styles);
+      const fill = fillFor(ds?.bg);
+      if (fill) headRow.getCell(i + 1).fill = fill;
+    });
+    valueColumns.forEach((vc, v) => {
+      const vs = resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles);
+      const fill = fillFor(vs?.bg);
+      if (fill) headRow.getCell(rowFields.length + 1 + v).fill = fill;
+    });
+  }
 }
 
 function pivotDataLine(row, layout) {
@@ -135,13 +221,75 @@ function pivotFooterLine(layout) {
   return footer;
 }
 
-function addPivotSheet(wb, layout) {
+function addPivotSheet(wb, layout, colors = {}, styles = {}) {
   const ws = wb.addWorksheet('Laporan Penjualan', { views: [{ showGridLines: true }] });
-  addPivotHeaders(ws, layout);
+  addPivotHeaders(ws, layout, colors, styles);
 
+  const rowFieldCount = layout.rowFields.length;
   for (const row of layout.rows) {
     const added = ws.addRow(pivotDataLine(row, layout));
     formatNumericCells(added);
+
+    // Preseden sel label: kategori penuh > baris > kolom dimensi > tint lama.
+    const tint = rowTintHex(row, layout, colors);
+    const tintFill = fillFor(tint);
+    const rowStyle = resolveTableStyle(
+      'row',
+      rowSignature(row.key, layout.rowFields),
+      styles,
+    );
+    const rowFill = fillFor(rowStyle?.bg);
+    const rowFont = rowStyle?.color ? hexToArgb(rowStyle.color) : null;
+    for (let c = 1; c <= rowFieldCount; c++) {
+      const rf = layout.rowFields[c - 1];
+      const rule = resolveColor(rf.key, row.key?.[rf.key], colors);
+      const cell = added.getCell(c);
+      if (rule?.bg) {
+        const fill = fillFor(rule.bg);
+        if (fill) cell.fill = fill;
+        const fontArgb = hexToArgb(rule.color);
+        if (fontArgb) cell.font = { color: { argb: fontArgb } };
+      } else if (rowFill) {
+        cell.fill = rowFill;
+        if (rowFont) cell.font = { color: { argb: rowFont } };
+      } else {
+        const ds = resolveTableStyle('column', `rowdim:${rf.key}`, styles);
+        const dimFill = fillFor(ds?.bg);
+        if (dimFill) {
+          cell.fill = dimFill;
+          const dimFont = ds.color ? hexToArgb(ds.color) : null;
+          if (dimFont) cell.font = { color: { argb: dimFont } };
+        } else if (tintFill) {
+          cell.fill = tintFill;
+        }
+      }
+    }
+
+    // Preseden sel nilai: baris > kolom (grup lalu measure) > tint lama. Grand Total ikut baris.
+    const valueCellCount = added.cellCount - rowFieldCount;
+    for (let k = 0; k < valueCellCount; k++) {
+      const ck =
+        layout.valCount === 0 ? undefined : layout.columnKeys[Math.floor(k / layout.valCount)];
+      const vc = layout.valueColumns[layout.valCount === 0 ? 0 : k % layout.valCount];
+      let style = rowStyle?.bg ? rowStyle : null;
+      if (!style && ck != null && layout.columnField) {
+        style =
+          resolveTableStyle('column', `col:${layout.columnField.key}:${ck}`, styles) ?? null;
+      }
+      if (!style && vc) {
+        style =
+          resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles) ??
+          null;
+      }
+      const legacy = columnTintHex(ck, layout, colors) ?? tint;
+      const fill = fillFor(style?.bg ?? legacy);
+      if (fill) {
+        const cell = added.getCell(rowFieldCount + 1 + k);
+        cell.fill = fill;
+        const fontArgb = style?.color ? hexToArgb(style.color) : null;
+        if (fontArgb) cell.font = { color: { argb: fontArgb } };
+      }
+    }
   }
 
   // Grand Total footer (only if row dimensions exist).
@@ -199,15 +347,17 @@ function addVizSheet(wb, layout) {
   return { categories, seriesList };
 }
 
-export async function buildXlsxBuffer(report) {
+export async function buildXlsxBuffer(report, colors = {}, tableStyles = {}) {
   const [{ default: ExcelJS }, { default: JSZip }] = await loadExcelLibs();
   const layout = buildPivotLayout(report);
+  const cls = colors ?? {};
+  const sty = tableStyles ?? {};
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Sales Report Builder';
   wb.created = new Date();
 
-  addPivotSheet(wb, layout);
+  addPivotSheet(wb, layout, cls, sty);
   const viz = addVizSheet(wb, layout);
 
   const zip = await JSZip.loadAsync(await wb.xlsx.writeBuffer());
