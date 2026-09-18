@@ -1,6 +1,7 @@
 import { reactive, ref, computed, watch } from 'vue';
 import { api } from '../api/client.js';
 import { buildXlsxBuffer } from '../utils/xlsxExport.js';
+import { tableStylesToMap } from '../utils/cellStyle.js';
 
 export function useReportBuilder() {
   const meta = ref(null);
@@ -16,10 +17,11 @@ export function useReportBuilder() {
     values: [],
     filters: [],
     colors: {},
+    styles: {},
   });
 
   const globalColors = ref({});
-  const colorsEnabled = ref(true);
+  const tableStyles = ref({});
 
   const canRun = computed(() => config.rows.length + config.columns.length + config.values.length > 0);
 
@@ -43,13 +45,15 @@ export function useReportBuilder() {
         value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : filter.value,
       })),
     colors: JSON.parse(JSON.stringify(config.colors ?? {})),
+    styles: JSON.parse(JSON.stringify(config.styles ?? {})),
   });
 
-  // Payload bersih untuk backend: tanpa colors (override warna hanya urusan tampil),
+  // Payload bersih untuk backend: tanpa colors/styles (hanya urusan tampil),
   // agar ubah warna laporan tidak memicu fetch sia-sia.
   const backendPayload = () => {
     const payload = configToPayload();
     delete payload.colors;
+    delete payload.styles;
     return payload;
   };
 
@@ -99,7 +103,7 @@ export function useReportBuilder() {
     }
   }
 
-  async function downloadXlsx(overrideReport) {
+  async function downloadXlsx(overrideReport, colors = {}, tableStyles = {}, filename = null) {
     const reportData = overrideReport ?? result.value;
     if (!reportData) {
       error.value = 'Belum ada laporan untuk diexport.';
@@ -107,13 +111,17 @@ export function useReportBuilder() {
     }
     try {
       // ponytail: export formatted pivot + native editable OpenXML chart to xlsx
-      const blob = await buildXlsxBuffer(reportData);
+      const blob = await buildXlsxBuffer(reportData, colors, tableStyles);
       const date = new Date().toISOString().slice(0, 10);
-      const filename = `laporan-${date}.xlsx`;
+      const safe = String(filename ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = safe ? `${safe}-${date}.xlsx` : `laporan-${date}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -129,6 +137,7 @@ export function useReportBuilder() {
     config.values = [];
     config.filters = [];
     config.colors = {};
+    config.styles = {};
     result.value = null;
     error.value = null;
     lastPayloadJson = null;
@@ -219,6 +228,10 @@ export function useReportBuilder() {
         report.config.colors && typeof report.config.colors === 'object'
           ? JSON.parse(JSON.stringify(report.config.colors))
           : {},
+      styles:
+        report.config.styles && typeof report.config.styles === 'object'
+          ? JSON.parse(JSON.stringify(report.config.styles))
+          : {},
     });
     result.value = null;
     error.value = null;
@@ -254,6 +267,26 @@ export function useReportBuilder() {
     }
   }
 
+  async function loadTableStyles() {
+    try {
+      const data = await api.tableStyles.list();
+      tableStyles.value = tableStylesToMap(data?.styles);
+    } catch (err) {
+      console.warn('Gagal memuat gaya tabel:', err.message);
+    }
+  }
+
+  async function saveGlobalTableStyles(styles) {
+    try {
+      const data = await api.tableStyles.save(styles);
+      tableStyles.value = tableStylesToMap(data?.styles);
+      return true;
+    } catch (err) {
+      error.value = err.message;
+      return false;
+    }
+  }
+
   function setColorOverride(colors) {
     config.colors = JSON.parse(JSON.stringify(colors ?? {}));
   }
@@ -262,8 +295,12 @@ export function useReportBuilder() {
     config.colors = {};
   }
 
-  function toggleColorsEnabled() {
-    colorsEnabled.value = !colorsEnabled.value;
+  function setTableStylesOverride(styles) {
+    config.styles = JSON.parse(JSON.stringify(styles ?? {}));
+  }
+
+  function clearTableStylesOverride() {
+    config.styles = {};
   }
 
   async function deleteSaved(id) {
@@ -304,7 +341,7 @@ export function useReportBuilder() {
     savedReports,
     config,
     globalColors,
-    colorsEnabled,
+    tableStyles,
     canRun,
     availableDimensions,
     loadMeta,
@@ -312,7 +349,10 @@ export function useReportBuilder() {
     saveGlobalColors,
     setColorOverride,
     clearColorOverride,
-    toggleColorsEnabled,
+    loadTableStyles,
+    saveGlobalTableStyles,
+    setTableStylesOverride,
+    clearTableStylesOverride,
     refreshSaved,
     run,
     downloadXlsx,

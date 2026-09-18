@@ -49,4 +49,9 @@ export const api = {
     list: () => request('/colors'),
     save: (colors) => request('/colors', { method: 'PUT', body: JSON.stringify({ colors }) }),
   },
+
+  tableStyles: {
+    list: () => request('/table-styles'),
+    save: (styles) => request('/table-styles', { method: 'PUT', body: JSON.stringify({ styles }) }),
+  },
 };
