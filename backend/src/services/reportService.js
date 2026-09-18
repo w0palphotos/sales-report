@@ -6,6 +6,30 @@ import { CsvFormatter } from '../core/CsvFormatter.js';
 
 export const reportSchema = new ReportSchema(pool);
 
+// Jalankan daftar statement atomik bila db mendukung transaksi eksplisit
+// (pg Pool), atau sekuensial bila tidak (PGlite).
+async function runStatements(db, statements) {
+  if (typeof db.connect !== 'function') {
+    for (const statement of statements) {
+      await db.query(statement.text, statement.params);
+    }
+    return;
+  }
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    for (const statement of statements) {
+      await client.query(statement.text, statement.params);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function runReport(config) {
   await reportSchema.loadFromDatabase();
   const queryBuilder = new QueryBuilder(reportSchema);
@@ -155,33 +179,13 @@ export async function replaceCategoryColors(colors, db = pool, schema = reportSc
   if (schema === reportSchema) await reportSchema.loadFromDatabase();
   const rules = validateColorRules(colors, schema);
 
-  const statements = [
+  await runStatements(db, [
     { text: 'DELETE FROM category_colors', params: [] },
     ...rules.map((rule) => ({
       text: 'INSERT INTO category_colors (field, value, bg, color) VALUES ($1, $2, $3, $4)',
       params: [rule.field, rule.value, rule.bg, rule.color],
     })),
-  ];
-
-  if (typeof db.connect === 'function') {
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-      for (const statement of statements) {
-        await client.query(statement.text, statement.params);
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  } else {
-    for (const statement of statements) {
-      await db.query(statement.text, statement.params);
-    }
-  }
+  ]);
 
   return listCategoryColors(db);
 }
@@ -254,33 +258,13 @@ export async function replaceTableStyles(styles, db = pool, schema = reportSchem
   if (schema === reportSchema) await reportSchema.loadFromDatabase();
   const rules = validateTableStyles(styles, schema);
 
-  const statements = [
+  await runStatements(db, [
     { text: 'DELETE FROM table_styles', params: [] },
     ...rules.map((rule) => ({
       text: 'INSERT INTO table_styles (kind, key, bg, color) VALUES ($1, $2, $3, $4)',
       params: [rule.kind, rule.key, rule.bg, rule.color],
     })),
-  ];
-
-  if (typeof db.connect === 'function') {
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-      for (const statement of statements) {
-        await client.query(statement.text, statement.params);
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  } else {
-    for (const statement of statements) {
-      await db.query(statement.text, statement.params);
-    }
-  }
+  ]);
 
   return listTableStyles(db);
 }

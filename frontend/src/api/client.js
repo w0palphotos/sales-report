@@ -6,7 +6,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
   const response = await fetch(`${BASE}${path}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json', ...headers } : headers,
-    body,
+    ...(body ? { body } : {}),
   });
 
   if (response.status === 204) return null;

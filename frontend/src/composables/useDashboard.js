@@ -10,6 +10,57 @@ let nextBlockId = 1;
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? {}));
 
+function cleanTitle(title, fallback) {
+  const clean = typeof title === 'string' ? title.trim().slice(0, 80) : '';
+  return clean || fallback;
+}
+
+// Nomor terkecil yang belum dipakai ("Laporan 1", "Laporan 2", ...),
+// dihitung dari judul blok yang ada — bukan counter yang terus naik.
+function nextTitle(blocks) {
+  const used = new Set(
+    blocks
+      .map((b) => /^laporan (\d+)$/i.exec(String(b.title ?? '').trim()))
+      .filter(Boolean)
+      .map((m) => Number(m[1])),
+  );
+  let n = 1;
+  while (used.has(n)) n++;
+  return `Laporan ${n}`;
+}
+
+function snapshotBlocks(blocks) {
+  return blocks.map((block) => ({
+    title: block.title,
+    showChart: block.showChart,
+    config: {
+      rows: [...block.builder.config.rows],
+      columns: [...block.builder.config.columns],
+      values: clone(block.builder.config.values),
+      filters: clone(block.builder.config.filters),
+      colors: clone(block.builder.config.colors),
+      styles: clone(block.builder.config.styles),
+    },
+  }));
+}
+
+function persistBlocks(blocks) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotBlocks(blocks)));
+  } catch {
+    // penyimpanan penuh/nonaktif: dashboard tetap jalan sesi ini
+  }
+}
+
+function restoreItems() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
 // Dashboard multi-blok: tiap blok adalah useReportBuilder mandiri
 // (factory murni, aman diinstansiasi berkali-kali). Susunan blok
 // disimpan di localStorage; backend tidak berubah.
@@ -19,58 +70,16 @@ export function useDashboard() {
   const sharedMeta = ref(null);
   const error = ref(null);
 
-  function cleanTitle(title, fallback) {
-    const clean = typeof title === 'string' ? title.trim().slice(0, 80) : '';
-    return clean || fallback;
-  }
-
-  // Nomor terkecil yang belum dipakai ("Laporan 1", "Laporan 2", ...),
-  // dihitung dari judul blok yang ada — bukan counter yang terus naik.
-  function nextTitle() {
-    const used = new Set(
-      blocks.value
-        .map((b) => /^laporan (\d+)$/i.exec(String(b.title ?? '').trim()))
-        .filter(Boolean)
-        .map((m) => Number(m[1])),
-    );
-    let n = 1;
-    while (used.has(n)) n++;
-    return `Laporan ${n}`;
-  }
-
   function createBlock(title = null) {
     const builder = useReportBuilder();
     if (sharedMeta.value) builder.meta.value = sharedMeta.value;
     builder.loadColors();
     builder.loadTableStyles();
     const id = nextBlockId++;
-    return { id, title: cleanTitle(title, nextTitle()), builder, showChart: true };
+    return { id, title: cleanTitle(title, nextTitle(blocks.value)), builder, showChart: true };
   }
 
-  function snapshot() {
-    return blocks.value.map((block) => ({
-      title: block.title,
-      showChart: block.showChart,
-      config: {
-        rows: [...block.builder.config.rows],
-        columns: [...block.builder.config.columns],
-        values: clone(block.builder.config.values),
-        filters: clone(block.builder.config.filters),
-        colors: clone(block.builder.config.colors),
-        styles: clone(block.builder.config.styles),
-      },
-    }));
-  }
-
-  function persist() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot()));
-    } catch {
-      // penyimpanan penuh/nonaktif: dashboard tetap jalan sesi ini
-    }
-  }
-
-  const persistenceKey = computed(() => JSON.stringify(snapshot()));
+  const persistenceKey = computed(() => JSON.stringify(snapshotBlocks(blocks.value)));
 
   function addBlankBlock(title = null) {
     if (blocks.value.length >= MAX_BLOCKS) {
@@ -130,13 +139,7 @@ export function useDashboard() {
     }
     await refreshSaved();
 
-    let restored = [];
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (Array.isArray(raw)) restored = raw;
-    } catch {
-      restored = [];
-    }
+    let restored = restoreItems();
     if (restored.length === 0) restored = [null];
     for (const item of restored.slice(0, MAX_BLOCKS)) {
       const block = createBlock(item?.title ?? null);
@@ -148,7 +151,7 @@ export function useDashboard() {
     }
 
     // Simpan susunan setiap ada perubahan konfigurasi blok.
-    watch(persistenceKey, () => persist());
+    watch(persistenceKey, () => persistBlocks(blocks.value));
   }
 
   const canAdd = computed(() => blocks.value.length < MAX_BLOCKS);

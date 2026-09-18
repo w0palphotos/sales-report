@@ -1,5 +1,98 @@
 import { computed } from 'vue';
 
+function buildDataRow(row, { rFields, cKeys, vals, hasCol }) {
+  const rowArr = [];
+  for (const rf of rFields) {
+    rowArr.push(row.key[rf.key] ?? '');
+  }
+  if (hasCol) {
+    for (const ck of cKeys) {
+      const cellVals = row.cells[ck] ?? [];
+      if (vals.length === 0) {
+        rowArr.push('');
+      } else {
+        for (const val of cellVals) {
+          rowArr.push(val);
+        }
+      }
+    }
+    if (vals.length === 0) {
+      rowArr.push('');
+    } else {
+      for (const val of row.rowTotal ?? []) {
+        rowArr.push(val);
+      }
+    }
+  } else {
+    for (const val of row.cells['__all__'] ?? []) {
+      rowArr.push(val);
+    }
+  }
+  return rowArr;
+}
+
+function buildTotalRow({ rFields, cKeys, vals, hasCol, columnTotals, grandTotal }) {
+  // Baris total hanya tampil bila ada minimal satu dimensi baris.
+  if (rFields.length === 0) return null;
+  const totalRow = [];
+  rFields.forEach((_, i) => {
+    totalRow.push(i === 0 ? 'Grand Total' : '');
+  });
+  if (hasCol) {
+    for (const ck of cKeys) {
+      const colTot = columnTotals[ck] ?? [];
+      if (vals.length === 0) {
+        totalRow.push('');
+      } else {
+        for (const val of colTot) {
+          totalRow.push(val);
+        }
+      }
+    }
+    if (vals.length === 0) {
+      totalRow.push('');
+    } else {
+      for (const val of grandTotal) {
+        totalRow.push(val);
+      }
+    }
+  } else {
+    for (const val of grandTotal) {
+      totalRow.push(val);
+    }
+  }
+  return totalRow;
+}
+
+function sumVisibleTotals(visibleRows, { cKeys, valCount, hasCol }) {
+  const columnTotals = {};
+  for (const ck of cKeys) {
+    columnTotals[ck] = Array(valCount).fill(0);
+  }
+  const grandTotal = Array(valCount).fill(0);
+
+  for (const row of visibleRows) {
+    if (hasCol) {
+      for (const ck of cKeys) {
+        const cells = row.cells[ck] ?? [];
+        for (let v = 0; v < valCount; v++) {
+          columnTotals[ck][v] += Number(cells[v]) || 0;
+        }
+      }
+      for (let v = 0; v < valCount; v++) {
+        grandTotal[v] += Number(row.rowTotal?.[v]) || 0;
+      }
+    } else {
+      const cells = row.cells['__all__'] ?? [];
+      for (let v = 0; v < valCount; v++) {
+        grandTotal[v] += Number(cells[v]) || 0;
+      }
+    }
+  }
+
+  return { columnTotals, grandTotal };
+}
+
 export function usePivotGrid(resultSource) {
   const rowFields = computed(() => resultSource.value?.meta?.rowFields ?? []);
   const columnField = computed(() => resultSource.value?.meta?.columnField ?? null);
@@ -46,69 +139,19 @@ export function usePivotGrid(resultSource) {
     const vals = valueColumns.value;
     const hasCol = Boolean(columnField.value);
 
-    // Data rows
     for (const row of resultSource.value.rows ?? []) {
-      const rowArr = [];
-      for (const rf of rFields) {
-        rowArr.push(row.key[rf.key] ?? '');
-      }
-      if (hasCol) {
-        for (const ck of cKeys) {
-          const cellVals = row.cells[ck] ?? [];
-          if (vals.length === 0) {
-            rowArr.push('');
-          } else {
-            for (const val of cellVals) {
-              rowArr.push(val);
-            }
-          }
-        }
-        if (vals.length === 0) {
-          rowArr.push('');
-        } else {
-          for (const val of row.rowTotal ?? []) {
-            rowArr.push(val);
-          }
-        }
-      } else {
-        for (const val of row.cells['__all__'] ?? []) {
-          rowArr.push(val);
-        }
-      }
-      data.push(rowArr);
+      data.push(buildDataRow(row, { rFields, cKeys, vals, hasCol }));
     }
 
-    // Total footer row (only shown if there is at least one row dimension)
-    if (rFields.length > 0) {
-      const totalRow = [];
-      rFields.forEach((_, i) => {
-        totalRow.push(i === 0 ? 'Grand Total' : '');
-      });
-      if (hasCol) {
-        for (const ck of cKeys) {
-          const colTot = columnTotals.value[ck] ?? [];
-          if (vals.length === 0) {
-            totalRow.push('');
-          } else {
-            for (const val of colTot) {
-              totalRow.push(val);
-            }
-          }
-        }
-        if (vals.length === 0) {
-          totalRow.push('');
-        } else {
-          for (const val of grandTotal.value) {
-            totalRow.push(val);
-          }
-        }
-      } else {
-        for (const val of grandTotal.value) {
-          totalRow.push(val);
-        }
-      }
-      data.push(totalRow);
-    }
+    const totalRow = buildTotalRow({
+      rFields,
+      cKeys,
+      vals,
+      hasCol,
+      columnTotals: columnTotals.value,
+      grandTotal: grandTotal.value,
+    });
+    if (totalRow) data.push(totalRow);
 
     return data;
   });
@@ -131,30 +174,8 @@ export function usePivotGrid(resultSource) {
     const valCount = valueColumns.value.length;
     const cKeys = columnKeys.value;
 
-    const recalculatedColumnTotals = {};
-    for (const ck of cKeys) {
-      recalculatedColumnTotals[ck] = Array(valCount).fill(0);
-    }
-    const recalculatedGrandTotal = Array(valCount).fill(0);
-
-    for (const row of visibleRows) {
-      if (hasCol) {
-        for (const ck of cKeys) {
-          const cells = row.cells[ck] ?? [];
-          for (let v = 0; v < valCount; v++) {
-            recalculatedColumnTotals[ck][v] += Number(cells[v]) || 0;
-          }
-        }
-        for (let v = 0; v < valCount; v++) {
-          recalculatedGrandTotal[v] += Number(row.rowTotal?.[v]) || 0;
-        }
-      } else {
-        const cells = row.cells['__all__'] ?? [];
-        for (let v = 0; v < valCount; v++) {
-          recalculatedGrandTotal[v] += Number(cells[v]) || 0;
-        }
-      }
-    }
+    const { columnTotals: recalculatedColumnTotals, grandTotal: recalculatedGrandTotal } =
+      sumVisibleTotals(visibleRows, { cKeys, valCount, hasCol });
 
     return {
       ...resultSource.value,
@@ -162,7 +183,7 @@ export function usePivotGrid(resultSource) {
       columnTotals: recalculatedColumnTotals,
       grandTotal: recalculatedGrandTotal,
     };
-  }
+  };
 
   return {
     rowFields,

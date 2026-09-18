@@ -3,6 +3,42 @@ import { api } from '../api/client.js';
 import { buildXlsxBuffer } from '../utils/xlsxExport.js';
 import { tableStylesToMap } from '../utils/cellStyle.js';
 
+const clone = (value) => JSON.parse(JSON.stringify(value ?? {}));
+
+const hasValidValue = (filter) => {
+  if (Array.isArray(filter.value)) return filter.value.every((item) => item !== '' && item != null);
+  return filter.value !== '' && filter.value != null;
+};
+
+function toColorMap(list) {
+  const map = {};
+  for (const item of list ?? []) {
+    if (!item || !item.field || item.value == null) continue;
+    if (!map[item.field]) map[item.field] = {};
+    map[item.field][String(item.value)] = { bg: item.bg, color: item.color ?? '#2f3437' };
+  }
+  return map;
+}
+
+// Normalisasi config laporan tersimpan (lama/baru) ke bentuk state kini.
+function normalizeSavedConfig(rawConfig) {
+  const config = rawConfig ?? {};
+  return {
+    rows: config.rows ?? [],
+    columns: config.columns ?? [],
+    values: config.values ?? [],
+    // Laporan lama: buang operator, satukan nilai 'between'.
+    filters: (config.filters ?? []).map((filter) => ({
+      field: filter.field ?? '',
+      value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : (filter.value ?? ''),
+    })),
+    colors:
+      config.colors && typeof config.colors === 'object' ? clone(config.colors) : {},
+    styles:
+      config.styles && typeof config.styles === 'object' ? clone(config.styles) : {},
+  };
+}
+
 export function useReportBuilder() {
   const meta = ref(null);
   const loading = ref(false);
@@ -44,8 +80,8 @@ export function useReportBuilder() {
         operator: '=',
         value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : filter.value,
       })),
-    colors: JSON.parse(JSON.stringify(config.colors ?? {})),
-    styles: JSON.parse(JSON.stringify(config.styles ?? {})),
+    colors: clone(config.colors),
+    styles: clone(config.styles),
   });
 
   // Payload bersih untuk backend: tanpa colors/styles (hanya urusan tampil),
@@ -55,11 +91,6 @@ export function useReportBuilder() {
     delete payload.colors;
     delete payload.styles;
     return payload;
-  };
-
-  const hasValidValue = (filter) => {
-    if (Array.isArray(filter.value)) return filter.value.every((item) => item !== '' && item != null);
-    return filter.value !== '' && filter.value != null;
   };
 
   async function loadMeta() {
@@ -215,36 +246,9 @@ export function useReportBuilder() {
   }
 
   function loadReport(report) {
-    Object.assign(config, {
-      rows: report.config.rows ?? [],
-      columns: report.config.columns ?? [],
-      values: report.config.values ?? [],
-      // Normalisasi laporan lama: buang operator, satukan nilai 'between'.
-      filters: (report.config.filters ?? []).map((filter) => ({
-        field: filter.field ?? '',
-        value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : (filter.value ?? ''),
-      })),
-      colors:
-        report.config.colors && typeof report.config.colors === 'object'
-          ? JSON.parse(JSON.stringify(report.config.colors))
-          : {},
-      styles:
-        report.config.styles && typeof report.config.styles === 'object'
-          ? JSON.parse(JSON.stringify(report.config.styles))
-          : {},
-    });
+    Object.assign(config, normalizeSavedConfig(report.config));
     result.value = null;
     error.value = null;
-  }
-
-  function toColorMap(list) {
-    const map = {};
-    for (const item of list ?? []) {
-      if (!item || !item.field || item.value == null) continue;
-      if (!map[item.field]) map[item.field] = {};
-      map[item.field][String(item.value)] = { bg: item.bg, color: item.color ?? '#2f3437' };
-    }
-    return map;
   }
 
   async function loadColors() {

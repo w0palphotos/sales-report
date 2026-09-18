@@ -261,26 +261,6 @@ kbd {
   margin: 0;
 }
 
-.site-footer {
-  border-top: 1px solid var(--border);
-  padding: 32px 24px 48px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.site-footer .container {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.mono-note {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-}
-
 /* Label kecil + tombol hapus chip (dipakai toolbar pivot & builder nilai) */
 .sheet-label {
   font-family: var(--font-mono, monospace);

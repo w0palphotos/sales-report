@@ -1,11 +1,27 @@
 import { pool } from '../config/db.js';
 
 async function getOrCreateDimension(client, table, name) {
-  let res = await client.query(`SELECT id FROM ${table} WHERE name = $1`, [name]);
+  // Nama tabel tidak pernah diinterpolasi: tiap tabel punya statement statis.
+  // Nilai yang lolos validasi ini selalu berasal dari konstanta internal.
+  let selectText;
+  let insertText;
+  if (table === 'salespeople') {
+    selectText = 'SELECT id FROM salespeople WHERE name = $1';
+    insertText = 'INSERT INTO salespeople (name) VALUES ($1) RETURNING id';
+  } else if (table === 'cities') {
+    selectText = 'SELECT id FROM cities WHERE name = $1';
+    insertText = 'INSERT INTO cities (name) VALUES ($1) RETURNING id';
+  } else if (table === 'products') {
+    selectText = 'SELECT id FROM products WHERE name = $1';
+    insertText = 'INSERT INTO products (name) VALUES ($1) RETURNING id';
+  } else {
+    throw new Error(`Tabel dimensi tidak dikenal: ${table}`);
+  }
+  let res = await client.query(selectText, [name]);
   if (res.rows.length > 0) {
     return res.rows[0].id;
   }
-  res = await client.query(`INSERT INTO ${table} (name) VALUES ($1) RETURNING id`, [name]);
+  res = await client.query(insertText, [name]);
   return res.rows[0].id;
 }
 

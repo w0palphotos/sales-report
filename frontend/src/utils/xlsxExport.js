@@ -68,22 +68,7 @@ function columnTintHex(ck, layout, colors) {
   return rule?.bg ?? null;
 }
 
-function rowStyleHex(pivotRow, layout, styles) {
-  return resolveTableStyle('row', rowSignature(pivotRow.key, layout.rowFields), styles)?.bg ?? null;
-}
 
-function valueColumnStyleHex(ck, vIdx, layout, styles) {
-  if (ck != null && layout.columnField) {
-    const gs = resolveTableStyle('column', `col:${layout.columnField.key}:${ck}`, styles);
-    if (gs?.bg) return gs;
-  }
-  const vc = layout.valueColumns[vIdx];
-  if (vc) {
-    const vs = resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles);
-    if (vs?.bg) return vs;
-  }
-  return null;
-}
 
 function borderStyle() {
   const thin = { style: 'thin', color: { argb: 'FFE5E5E3' } };
@@ -126,7 +111,7 @@ function addPivotHeaders(ws, layout, colors = {}, styles = {}) {
   }
 
   // Row 1: top group header (column key spans valCount cells) + Grand Total.
-  const top = [...rowFields.map((rf) => rf.label)];
+  const top = rowFields.map((rf) => rf.label);
   for (const ck of columnKeys) {
     top.push(ck);
     for (let v = 1; v < valCount; v++) top.push('');
@@ -136,7 +121,7 @@ function addPivotHeaders(ws, layout, colors = {}, styles = {}) {
   styleHeader(ws.addRow(top));
 
   // Row 2: value sub-headers under each column key.
-  const sub = [...rowFields.map(() => '')];
+  const sub = rowFields.map(() => '');
   for (let c = 0; c < columnKeys.length; c++) {
     for (const vc of valueColumns) sub.push(vc.label);
   }
@@ -370,7 +355,7 @@ export async function buildXlsxBuffer(report, colors = {}, tableStyles = {}) {
 }
 
 export async function parseXlsxBuffer(buffer) {
-  const [{ default: ExcelJS }] = await Promise.all([import('exceljs')]);
+  const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
   const worksheet = workbook.worksheets[0];
