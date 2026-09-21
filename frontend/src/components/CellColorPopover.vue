@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { DEFAULT_TEXT } from '../utils/cellStyle.js';
+import { DEFAULT_TEXT, normalizeHex } from '../utils/cellStyle.js';
 import { FILL_PALETTE, DEFAULT_TABLE_STYLE } from '../utils/tablePresets.js';
 
 const props = defineProps({
@@ -10,7 +10,7 @@ const props = defineProps({
   error: { type: String, default: '' },
 });
 
-const emit = defineEmits(['save', 'remove', 'reset', 'close']);
+const emit = defineEmits(['save', 'remove', 'reset', 'preview', 'close']);
 
 const targetKind = ref(props.options[0]?.kind ?? 'category');
 const targetKey = ref(props.options[0]?.key ?? props.options[0]?.value ?? null);
@@ -42,6 +42,22 @@ function applySwatch(swatch) {
   color.value = swatch.color ?? DEFAULT_TEXT;
 }
 
+// Nilai untuk <input type="color"> selalu perlu format #rrggbb.
+const bgPicker = computed(() => normalizeHex(bg.value) ?? '#ffffff');
+const colorPicker = computed(() => normalizeHex(color.value) ?? DEFAULT_TEXT);
+
+// Hex manual: terima #rgb / #rrggbb. Input tidak valid dikembalikan ke nilai aktif.
+function onHexChange(target, event) {
+  const hex = normalizeHex(event.target.value);
+  if (hex) {
+    if (target === 'bg') bg.value = hex;
+    else color.value = hex;
+    event.target.value = hex;
+    return;
+  }
+  event.target.value = target === 'bg' ? bg.value : color.value;
+}
+
 watch(scopeLocked, (locked) => {
   if (locked) scope.value = 'report';
 });
@@ -68,6 +84,9 @@ watch(targetKey, () => {
     color.value = opt.globalRule?.color ?? opt.overrideRule?.color ?? color.value;
   }
 });
+
+// Preview langsung ke tabel tiap warna berubah, sebelum disimpan.
+watch([bg, color, targetKind, targetKey], () => emit('preview', currentPayload()));
 
 const panel = ref(null);
 const pos = ref({ left: props.x, top: props.y });
@@ -122,18 +141,6 @@ onUnmounted(() => {
 
       <p v-if="error" class="popover-error" role="alert">{{ error }}</p>
 
-      <div class="popover-palette">
-        <button
-          v-for="sw in FILL_PALETTE"
-          :key="sw.bg"
-          type="button"
-          class="palette-swatch"
-          :title="sw.label"
-          :style="{ background: sw.bg }"
-          @click="applySwatch(sw)"
-        />
-      </div>
-
       <div class="popover-scope">
         <label v-for="opt in options" :key="opt.kind + ':' + (opt.key ?? opt.value)">
           <input
@@ -184,14 +191,60 @@ onUnmounted(() => {
         </span>
       </div>
 
-      <label class="popover-field">
-        <span>Latar</span>
-        <input v-model="bg" type="color" />
-      </label>
-      <label class="popover-field">
-        <span>Teks</span>
-        <input v-model="color" type="color" />
-      </label>
+      <div class="picker-section">
+        <span class="picker-label">Latar</span>
+        <div class="popover-palette">
+          <button
+            v-for="sw in FILL_PALETTE"
+            :key="sw.bg"
+            type="button"
+            class="palette-swatch"
+            :title="sw.label"
+            :style="{ background: sw.bg }"
+            @click="applySwatch(sw)"
+          />
+        </div>
+        <div class="picker-custom">
+          <input
+            class="picker-native"
+            type="color"
+            :value="bgPicker"
+            aria-label="Pilih warna latar"
+            @input="bg = $event.target.value"
+          />
+          <input
+            class="picker-hex"
+            type="text"
+            maxlength="7"
+            spellcheck="false"
+            :value="bg"
+            aria-label="Kode hex latar"
+            @change="onHexChange('bg', $event)"
+          />
+        </div>
+      </div>
+
+      <div class="picker-section">
+        <span class="picker-label">Teks</span>
+        <div class="picker-custom">
+          <input
+            class="picker-native"
+            type="color"
+            :value="colorPicker"
+            aria-label="Pilih warna teks"
+            @input="color = $event.target.value"
+          />
+          <input
+            class="picker-hex"
+            type="text"
+            maxlength="7"
+            spellcheck="false"
+            :value="color"
+            aria-label="Kode hex teks"
+            @change="onHexChange('color', $event)"
+          />
+        </div>
+      </div>
 
       <div v-if="scopeLocked" class="popover-hint">
         Warna per sel hanya untuk laporan ini.
@@ -317,11 +370,38 @@ onUnmounted(() => {
   border: 1px solid var(--border, #e5e5e3);
 }
 
-.popover-field {
+.picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picker-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-strong, #111111);
+}
+
+.picker-custom {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+}
+
+.picker-native {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border, #e5e5e3);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.picker-hex {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono, monospace);
 }
 
 .popover-scope {

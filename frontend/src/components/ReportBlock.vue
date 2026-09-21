@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import PivotToolbar from './PivotToolbar.vue';
 import FilterDrawer from './FilterDrawer.vue';
 import CellColorPopover from './CellColorPopover.vue';
+import TablePresetPopover from './TablePresetPopover.vue';
 import SaveDrawer from './SaveDrawer.vue';
 import ReportTable from './ReportTable.vue';
 import BarChart from './BarChart.vue';
@@ -22,6 +23,8 @@ const reportName = ref('');
 const showFilters = ref(false);
 const showSaveModal = ref(false);
 const colorTarget = ref(null);
+const presetTarget = ref(null);
+const colorPreview = ref(null);
 const colorError = ref('');
 const editingTitle = ref(false);
 const titleDraft = ref('');
@@ -46,12 +49,23 @@ function toggleFilters() {
 function onEditColor({ options, x, y }) {
   if (!options || options.length === 0) return;
   colorError.value = '';
+  colorPreview.value = null;
   colorTarget.value = { options, x, y };
 }
 
 function closeColorPopover() {
   colorTarget.value = null;
   colorError.value = '';
+  colorPreview.value = null;
+}
+
+function onEditPreset({ x, y }) {
+  presetTarget.value = { x, y };
+}
+
+function onApplyPreset(preset) {
+  builder.applyTablePreset(preset);
+  presetTarget.value = null;
 }
 
 function saveCategoryColor({ field, value, scope, bg, color }) {
@@ -240,7 +254,17 @@ function blockTableStyles() {
       @save="onSaveColor"
       @remove="onRemoveColor"
       @reset="onResetColor"
+      @preview="colorPreview = $event"
       @close="closeColorPopover"
+    />
+
+    <TablePresetPopover
+      v-if="presetTarget"
+      :x="presetTarget.x"
+      :y="presetTarget.y"
+      :current="builder.config.preset"
+      @apply="onApplyPreset"
+      @close="presetTarget = null"
     />
 
     <SaveDrawer
@@ -255,9 +279,11 @@ function blockTableStyles() {
         :result="builder.result"
         :colors="blockColors()"
         :table-styles="blockTableStyles()"
+        :preset="builder.config.preset"
+        :preview="colorPreview"
         @filter-change="filteredResult = $event"
         @edit-color="onEditColor"
-        @apply-preset="builder.applyTablePreset"
+        @edit-preset="onEditPreset"
         @reset-color="builder.resetTableColors"
       />
     </div>
