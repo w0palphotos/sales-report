@@ -74,6 +74,11 @@ export function styleKey(kind, key) {
   return `${kind}:${key}`;
 }
 
+// Identitas satu sel: gabungan signature baris + identitas kolom posisional.
+export function cellStyleKey(rowSig, columnId) {
+  return `${rowSig}::${columnId}`;
+}
+
 // Aturan posisional { "<kind>:<key>": { kind, key, bg, color } }; override menang.
 export function resolveTableStyle(kind, key, { global = {}, override = {} } = {}) {
   if (key == null) return null;

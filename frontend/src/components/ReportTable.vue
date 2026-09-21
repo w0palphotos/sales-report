@@ -13,8 +13,10 @@ import {
   paintCell,
   rowSignature,
   resolveTableStyle,
+  cellStyleKey,
   DEFAULT_TEXT,
 } from '../utils/cellStyle.js';
+import { DEFAULT_TABLE_STYLE, TABLE_PRESETS } from '../utils/tablePresets.js';
 import { usePivotGrid } from '../composables/usePivotGrid.js';
 
 registerAllModules();
@@ -25,7 +27,7 @@ const props = defineProps({
   tableStyles: { type: Object, default: () => ({ global: {}, override: {} }) },
 });
 
-const emit = defineEmits(['filter-change', 'edit-color']);
+const emit = defineEmits(['filter-change', 'edit-color', 'apply-preset', 'reset-color']);
 
 const hotRef = ref(null);
 
@@ -113,6 +115,7 @@ function rowStyleFor(physicalRow) {
 }
 
 // Kunci kolom posisional untuk sel nilai: grup (bila di bawah grup kolom) + measure.
+// `columnId` mengidentifikasi kolom ini secara unik untuk pewarnaan sel.
 function valueCellColumnKeys(col) {
   const meta = props.result?.meta ?? {};
   const vCols = meta.valueColumns ?? [];
@@ -126,24 +129,32 @@ function valueCellColumnKeys(col) {
   const valKey = `val:${vc.field ?? vc.key}:${vc.aggregation}`;
   if (meta.columnField && groupIdx < (props.result?.columnKeys ?? []).length) {
     const ck = props.result.columnKeys[groupIdx];
-    return { groupKey: `col:${meta.columnField.key}:${ck}`, groupLabel: String(ck), valKey, valLabel: vc.label };
+    const groupKey = `col:${meta.columnField.key}:${ck}`;
+    return {
+      groupKey,
+      groupLabel: String(ck),
+      valKey,
+      valLabel: vc.label,
+      columnId: `${groupKey}|${valKey}`,
+    };
   }
-  return { groupKey: null, groupLabel: null, valKey, valLabel: vc.label };
+  return { groupKey: null, groupLabel: null, valKey, valLabel: vc.label, columnId: valKey };
 }
 
-// Preseden sel nilai: baris > kolom (grup lalu measure) > tint kategori lama.
+// Preseden sel nilai: sel > baris > kolom (grup lalu measure) > tint kategori lama.
 function valueCellStyle(col, physicalRow) {
   const styles = props.tableStyles ?? {};
   const dataRow = physicalRow >= 0 ? props.result?.rows?.[physicalRow] : null;
+  const keys = valueCellColumnKeys(col);
   if (dataRow) {
-    const rs = resolveTableStyle(
-      'row',
-      rowSignature(dataRow.key, props.result?.meta?.rowFields ?? []),
-      styles,
-    );
+    const rowSig = rowSignature(dataRow.key, props.result?.meta?.rowFields ?? []);
+    if (keys) {
+      const cell = resolveTableStyle('cell', cellStyleKey(rowSig, keys.columnId), styles);
+      if (cell?.bg) return cell;
+    }
+    const rs = resolveTableStyle('row', rowSig, styles);
     if (rs?.bg) return rs;
   }
-  const keys = valueCellColumnKeys(col);
   if (keys) {
     if (keys.groupKey) {
       const gs = resolveTableStyle('column', keys.groupKey, styles);
@@ -153,13 +164,19 @@ function valueCellStyle(col, physicalRow) {
     if (vs?.bg) return vs;
   }
   const legacy = columnTintFor(col) ?? (dataRow ? rowTintFor(physicalRow) : null);
-  return legacy ? { bg: legacy, color: null } : null;
+  if (legacy) return { bg: legacy, color: null };
+  return { bg: DEFAULT_TABLE_STYLE.body, color: null };
 }
 
-// Preseden sel label baris: kategori penuh > baris > kolom dimensi > tint lama.
+// Preseden sel label baris: sel > kategori penuh > baris > kolom dimensi > tint lama.
 function labelCellStyle(fieldKey, physicalRow) {
   const styles = props.tableStyles ?? {};
   const dataRow = physicalRow >= 0 ? props.result?.rows?.[physicalRow] : null;
+  if (dataRow && fieldKey) {
+    const rowSig = rowSignature(dataRow.key, props.result?.meta?.rowFields ?? []);
+    const cell = resolveTableStyle('cell', cellStyleKey(rowSig, `rowdim:${fieldKey}`), styles);
+    if (cell?.bg) return cell;
+  }
   if (dataRow) {
     const rs = resolveTableStyle(
       'row',
@@ -173,10 +190,15 @@ function labelCellStyle(fieldKey, physicalRow) {
     if (ds?.bg) return ds;
   }
   const legacy = dataRow ? rowTintFor(physicalRow) : null;
-  return legacy ? { bg: legacy, color: null } : null;
+  if (legacy) return { bg: legacy, color: null };
+  return { bg: DEFAULT_TABLE_STYLE.body, color: null };
 }
 
-// Gaya header: aturan posisional dulu, lalu tint kategori lama (grup teratas saja).
+// Gaya header: aturan header khusus > aturan kolom > tint kategori lama (grup teratas saja).
+function resolveColumnFill(key, styles) {
+  return resolveTableStyle('header', key, styles) ?? resolveTableStyle('column', key, styles);
+}
+
 function headerStyleFor(col, headerRow) {
   const meta = props.result?.meta ?? {};
   const rFields = meta.rowFields ?? [];
@@ -188,22 +210,22 @@ function headerStyleFor(col, headerRow) {
     if (headerRow !== 0) return null;
     if (col < rFields.length) {
       const rf = rFields[col];
-      return rf ? resolveTableStyle('column', `rowdim:${rf.key}`, styles) : null;
+      return rf ? resolveColumnFill(`rowdim:${rf.key}`, styles) : null;
     }
     const vc = vCols[col - rFields.length];
-    return vc ? resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles) : null;
+    return vc ? resolveColumnFill(`val:${vc.field ?? vc.key}:${vc.aggregation}`, styles) : null;
   }
 
   if (headerRow === 0) {
     const offset = col - rowDimCount.value;
     if (offset < 0) {
       const rf = rFields[col];
-      return rf ? resolveTableStyle('column', `rowdim:${rf.key}`, styles) : null;
+      return rf ? resolveColumnFill(`rowdim:${rf.key}`, styles) : null;
     }
     const groupIdx = Math.floor(offset / valCount);
     const cks = props.result?.columnKeys ?? [];
     if (groupIdx >= cks.length) return null; // Grand Total
-    return resolveTableStyle('column', `col:${meta.columnField.key}:${cks[groupIdx]}`, styles);
+    return resolveColumnFill(`col:${meta.columnField.key}:${cks[groupIdx]}`, styles);
   }
 
   const offset = col - rowDimCount.value;
@@ -211,7 +233,7 @@ function headerStyleFor(col, headerRow) {
   const groupIdx = Math.floor(offset / valCount);
   if (groupIdx >= (props.result?.columnKeys ?? []).length) return null; // Grand Total
   const vc = vCols[offset % valCount];
-  return vc ? resolveTableStyle('column', `val:${vc.field ?? vc.key}:${vc.aggregation}`, styles) : null;
+  return vc ? resolveColumnFill(`val:${vc.field ?? vc.key}:${vc.aggregation}`, styles) : null;
 }
 
 // Tint header kolom dimensi (baris header teratas saja; Grand Total dan header baris tidak).
@@ -223,19 +245,19 @@ function tintColHeader(col, TH, headerRow) {
     return;
   }
   if (headerRow !== 0) {
-    paintCell(TH, {});
+    paintCell(TH, { background: DEFAULT_TABLE_STYLE.header });
     return;
   }
   const meta = props.result?.meta;
   const valCount = meta?.valueColumns?.length ?? 0;
   const offset = col - rowDimCount.value;
   if (!meta?.columnField || valCount === 0 || offset < 0) {
-    paintCell(TH, {});
+    paintCell(TH, { background: DEFAULT_TABLE_STYLE.header });
     return;
   }
   const ck = (props.result?.columnKeys ?? [])[Math.floor(offset / valCount)];
   const rule = ck == null ? null : resolveColor(meta.columnField.key, ck, props.colors ?? {});
-  paintCell(TH, { background: rule?.bg ?? null });
+  paintCell(TH, { background: rule?.bg ?? DEFAULT_TABLE_STYLE.header });
 }
 
 // Tint nomor baris mengikuti aturan barisnya (total/footer dikecualikan).
@@ -256,8 +278,8 @@ function tintRowHeader(row, TH) {
   paintCell(TH, { background: rs?.bg ?? null });
 }
 
-// Kandidat target dari sel yang sedang terseleksi: kategori (bila sel label),
-// baris (selalu, bila baris data), kolom (sel nilai / header nomor baris tidak).
+// Kandidat target dari sel yang sedang terseleksi: sel, kategori (bila sel label),
+// baris (selalu, bila baris data), kolom (sel nilai).
 function selectionOptions() {
   const instance = hotRef.value?.hotInstance;
   const sel = instance?.getSelectedLast?.();
@@ -270,16 +292,22 @@ function selectionOptions() {
   const dataRow = physicalRow >= 0 ? props.result?.rows?.[physicalRow] : null;
   if (!dataRow) return out;
   const rFields = props.result?.meta?.rowFields ?? [];
-  out.push({
-    kind: 'row',
-    key: rowSignature(dataRow.key, rFields),
-    label: 'Baris ini',
-  });
+  const rowSig = rowSignature(dataRow.key, rFields);
+
+  const columnId =
+    physicalCol >= 0 && physicalCol < rowDimCount.value
+      ? `rowdim:${rFields[physicalCol]?.key}`
+      : valueCellColumnKeys(vCol)?.columnId ?? null;
+
+  if (columnId) {
+    out.push({ kind: 'cell', key: cellStyleKey(rowSig, columnId), label: 'Sel ini' });
+  }
+
   if (physicalCol >= 0 && physicalCol < rowDimCount.value) {
     const rf = rFields[physicalCol];
     const value = dataRow.key?.[rf?.key];
     if (rf && value != null && value !== '') {
-      out.unshift({
+      out.push({
         kind: 'category',
         field: rf.key,
         value: String(value),
@@ -289,9 +317,11 @@ function selectionOptions() {
     }
   } else if (physicalCol >= rowDimCount.value) {
     const keys = valueCellColumnKeys(vCol);
+    if (keys?.valKey) out.push({ kind: 'column', key: keys.valKey, label: `Kolom ${keys.valLabel}` });
     if (keys?.groupKey) out.push({ kind: 'column', key: keys.groupKey, label: `Kolom ${keys.groupLabel}` });
-    else if (keys?.valKey) out.push({ kind: 'column', key: keys.valKey, label: `Kolom ${keys.valLabel}` });
   }
+
+  out.push({ kind: 'row', key: rowSig, label: 'Baris ini' });
   return out;
 }
 
@@ -373,6 +403,12 @@ function onSetColor(_key, _selection, clickEvent) {
   });
 }
 
+// Item submenu preset menerima nama perintah "set_table_preset:<key>".
+function onApplyPreset(commandName) {
+  const presetKey = String(commandName ?? '').split(':')[1] || 'none';
+  emit('apply-preset', presetKey);
+}
+
 function onCellMouseDown(event) {
   pendingHeaderOptions = [];
   if (event?.button === 2) {
@@ -387,6 +423,26 @@ function onMenuHide() {
 function hideSetColorItem() {
   if (pendingHeaderOptions.length > 0) return false;
   return selectionOptions().length === 0;
+}
+
+// Item reset hanya tampil bila masih ada warna (override laporan atau global).
+function hideResetColorItem() {
+  const colors = props.colors ?? {};
+  const styles = props.tableStyles ?? {};
+  return !(
+    hasEntries(colors.override) ||
+    hasEntries(colors.global) ||
+    hasEntries(styles.override) ||
+    hasEntries(styles.global)
+  );
+}
+
+function hasEntries(value) {
+  return Boolean(value) && Object.keys(value).length > 0;
+}
+
+function onResetColor() {
+  emit('reset-color');
 }
 
 function notifyFilterChange() {
@@ -419,6 +475,21 @@ const hotSettings = computed(() => ({
         name: 'Atur warna',
         hidden: hideSetColorItem,
         callback: onSetColor,
+      },
+      set_table_preset: {
+        name: 'Preset warna tabel',
+        submenu: {
+          items: TABLE_PRESETS.map((preset) => ({
+            key: `set_table_preset:${preset.key}`,
+            name: preset.label,
+            callback: onApplyPreset,
+          })),
+        },
+      },
+      reset_table_color: {
+        name: 'Reset warna tabel',
+        hidden: hideResetColorItem,
+        callback: onResetColor,
       },
     },
   },

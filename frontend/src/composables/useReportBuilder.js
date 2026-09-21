@@ -1,7 +1,8 @@
 import { reactive, ref, computed, watch } from 'vue';
 import { api } from '../api/client.js';
 import { buildXlsxBuffer } from '../utils/xlsxExport.js';
-import { tableStylesToMap } from '../utils/cellStyle.js';
+import { tableStylesToMap, styleKey } from '../utils/cellStyle.js';
+import { presetStyleEntries } from '../utils/tablePresets.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? {}));
 
@@ -340,6 +341,33 @@ export function useReportBuilder() {
     config.styles = {};
   }
 
+  // Reset seluruh warna tabel: hapus override laporan ini dan aturan global,
+  // sehingga tabel kembali ke warna default aplikasi.
+  async function resetTableColors() {
+    config.colors = {};
+    config.styles = {};
+    await saveGlobalColors([]);
+    await saveGlobalTableStyles([]);
+  }
+
+  // Terapkan preset warna tabel: hanya mengubah gaya kolom/header milik preset,
+  // membiarkan warna per sel/baris yang sudah diatur manual.
+  function applyTablePreset(presetKey) {
+    const meta = result.value?.meta;
+    if (!meta) return;
+    const { entries, keys } = presetStyleEntries(presetKey, {
+      meta,
+      columnKeys: result.value?.columnKeys ?? [],
+    });
+    const styles = clone(config.styles);
+    for (const key of keys) {
+      delete styles[styleKey('header', key)];
+      delete styles[styleKey('column', key)];
+    }
+    Object.assign(styles, entries);
+    config.styles = styles;
+  }
+
   async function deleteSaved(id) {
     try {
       await api.saved.remove(id);
@@ -390,6 +418,8 @@ export function useReportBuilder() {
     saveGlobalTableStyles,
     setTableStylesOverride,
     clearTableStylesOverride,
+    applyTablePreset,
+    resetTableColors,
     refreshSaved,
     run,
     downloadXlsx,

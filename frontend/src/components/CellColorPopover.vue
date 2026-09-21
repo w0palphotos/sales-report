@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { DEFAULT_TEXT } from '../utils/cellStyle.js';
+import { FILL_PALETTE, DEFAULT_TABLE_STYLE } from '../utils/tablePresets.js';
 
 const props = defineProps({
   options: { type: Array, default: () => [] },
@@ -9,7 +10,7 @@ const props = defineProps({
   error: { type: String, default: '' },
 });
 
-const emit = defineEmits(['save', 'remove', 'close']);
+const emit = defineEmits(['save', 'remove', 'reset', 'close']);
 
 const targetKind = ref(props.options[0]?.kind ?? 'category');
 const targetKey = ref(props.options[0]?.key ?? props.options[0]?.value ?? null);
@@ -24,7 +25,7 @@ const currentOption = computed(() =>
 const bg = ref(
   currentOption.value?.globalRule?.bg ??
     currentOption.value?.overrideRule?.bg ??
-    '#dbeafe',
+    DEFAULT_TABLE_STYLE.body,
 );
 const color = ref(
   currentOption.value?.globalRule?.color ??
@@ -33,14 +34,26 @@ const color = ref(
 );
 const scope = ref(currentOption.value?.overrideRule ? 'report' : 'global');
 
+// Pewarnaan per sel hanya berlaku untuk laporan ini (tidak masuk aturan global).
+const scopeLocked = computed(() => targetKind.value === 'cell');
+
+function applySwatch(swatch) {
+  bg.value = swatch.bg;
+  color.value = swatch.color ?? DEFAULT_TEXT;
+}
+
+watch(scopeLocked, (locked) => {
+  if (locked) scope.value = 'report';
+});
+
 watch(targetKind, () => {
   const opt =
     props.options.find((o) => o.kind === targetKind.value) ?? props.options[0] ?? null;
   if (opt) {
     targetKey.value = opt.kind === 'category' ? opt.value : opt.key;
-    bg.value = opt.globalRule?.bg ?? opt.overrideRule?.bg ?? '#dbeafe';
+    bg.value = opt.globalRule?.bg ?? opt.overrideRule?.bg ?? DEFAULT_TABLE_STYLE.body;
     color.value = opt.globalRule?.color ?? opt.overrideRule?.color ?? DEFAULT_TEXT;
-    scope.value = opt.overrideRule ? 'report' : 'global';
+    scope.value = scopeLocked.value ? 'report' : (opt.overrideRule ? 'report' : 'global');
   }
 });
 
@@ -109,6 +122,18 @@ onUnmounted(() => {
 
       <p v-if="error" class="popover-error" role="alert">{{ error }}</p>
 
+      <div class="popover-palette">
+        <button
+          v-for="sw in FILL_PALETTE"
+          :key="sw.bg"
+          type="button"
+          class="palette-swatch"
+          :title="sw.label"
+          :style="{ background: sw.bg }"
+          @click="applySwatch(sw)"
+        />
+      </div>
+
       <div class="popover-scope">
         <label v-for="opt in options" :key="opt.kind + ':' + (opt.key ?? opt.value)">
           <input
@@ -168,7 +193,10 @@ onUnmounted(() => {
         <input v-model="color" type="color" />
       </label>
 
-      <div class="popover-scope">
+      <div v-if="scopeLocked" class="popover-hint">
+        Warna per sel hanya untuk laporan ini.
+      </div>
+      <div v-else class="popover-scope">
         <label>
           <input v-model="scope" type="radio" value="global" />
           Global (semua laporan)
@@ -194,6 +222,14 @@ onUnmounted(() => {
           @click="emit('remove', currentPayload())"
         >
           Hapus warna
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-small"
+          title="Hapus semua warna laporan ini dan global"
+          @click="emit('reset')"
+        >
+          Reset warna
         </button>
         <button type="button" class="btn btn-ghost btn-small" @click="emit('close')">
           Batal
@@ -248,6 +284,25 @@ onUnmounted(() => {
 .popover-hint {
   font-size: 12px;
   color: var(--muted, #787774);
+}
+
+.popover-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.palette-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border, #e5e5e3);
+  cursor: pointer;
+}
+
+.palette-swatch:hover {
+  outline: 2px solid var(--border-strong, #999);
 }
 
 .mini-swatch {

@@ -133,6 +133,12 @@ async function onRemoveColor(payload) {
   else colorError.value = builder.error || 'Gagal menghapus warna.';
 }
 
+// Hapus semua warna (laporan ini + global) lalu tutup popover.
+async function onResetColor() {
+  await builder.resetTableColors();
+  closeColorPopover();
+}
+
 async function handleSave() {
   const ok = await builder.saveReport(reportName.value);
   if (ok) {
@@ -233,6 +239,7 @@ function blockTableStyles() {
       :error="colorError"
       @save="onSaveColor"
       @remove="onRemoveColor"
+      @reset="onResetColor"
       @close="closeColorPopover"
     />
 
@@ -250,6 +257,8 @@ function blockTableStyles() {
         :table-styles="blockTableStyles()"
         @filter-change="filteredResult = $event"
         @edit-color="onEditColor"
+        @apply-preset="builder.applyTablePreset"
+        @reset-color="builder.resetTableColors"
       />
     </div>
     <div v-else class="sheet-empty">
