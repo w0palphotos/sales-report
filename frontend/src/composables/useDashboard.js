@@ -40,6 +40,7 @@ function snapshotBlocks(blocks) {
       filters: clone(block.builder.config.filters),
       colors: clone(block.builder.config.colors),
       styles: clone(block.builder.config.styles),
+      preset: block.builder.config.preset ?? null,
     },
   }));
 }

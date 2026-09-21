@@ -1,4 +1,4 @@
-import { styleKey } from './cellStyle.js';
+import { normalizeHex } from './cellStyle.js';
 
 // Warna default tabel: dipakai sebagai baseline bila tidak ada aturan warna.
 // Ganti nilai di sini untuk mengubah tampilan dasar seluruh tabel.
@@ -38,13 +38,40 @@ export const TABLE_PRESETS = [
   { key: 'abu', label: 'Abu', header: '#cbd5e1', body: '#f8fafc', color: '#1e293b' },
 ];
 
-export function getTablePreset(key) {
-  return TABLE_PRESETS.find((preset) => preset.key === key) ?? TABLE_PRESETS[0];
+// Tema aktif: preset bawaan (kunci) atau preset kustom (objek warna).
+// Dipakai saat render sehingga preset otomatis mengikuti baris/kolom baru.
+export function resolveTheme(preset) {
+  const source =
+    preset && typeof preset === 'object'
+      ? preset
+      : TABLE_PRESETS.find((item) => item.key === preset) ?? null;
+  return {
+    header: normalizeHex(source?.header) ?? DEFAULT_TABLE_STYLE.header,
+    body: normalizeHex(source?.body) ?? DEFAULT_TABLE_STYLE.body,
+    color: normalizeHex(source?.color) ?? DEFAULT_TABLE_STYLE.color,
+  };
 }
 
-// Kunci kolom posisional yang dimiliki preset: kolom nilai, kolom dimensi baris,
+// Validasi preset dari UI/laporan tersimpan. Mengembalikan kunci bawaan, objek
+// kustom yang sudah dinormalisasi, atau null (tanpa preset).
+export function normalizePreset(preset) {
+  if (!preset || preset === 'none') return null;
+  if (typeof preset === 'object') {
+    const header = normalizeHex(preset.header);
+    const body = normalizeHex(preset.body);
+    if (!header && !body) return null;
+    return {
+      header: header ?? body,
+      body: body ?? header,
+      color: normalizeHex(preset.color) ?? DEFAULT_TABLE_STYLE.color,
+    };
+  }
+  return TABLE_PRESETS.some((item) => item.key === preset) ? preset : null;
+}
+
+// Kunci kolom posisional yang dicakup preset: kolom nilai, kolom dimensi baris,
 // dan (bila ada) grup kolom pivot.
-export function presetColumnKeys(meta, columnKeys = []) {
+export function presetOwnedKeys(meta, columnKeys = []) {
   const keys = [];
   for (const value of meta?.valueColumns ?? []) {
     keys.push(`val:${value.field ?? value.key}:${value.aggregation}`);
@@ -58,23 +85,4 @@ export function presetColumnKeys(meta, columnKeys = []) {
     }
   }
   return keys;
-}
-
-// Entri gaya untuk satu preset, siap dimerge ke override config.styles.
-export function presetStyleEntries(presetKey, { meta, columnKeys = [] } = {}) {
-  const preset = getTablePreset(presetKey);
-  const keys = presetColumnKeys(meta, columnKeys);
-  const entries = {};
-
-  for (const key of keys) {
-    if (!preset.header) {
-      delete entries[styleKey('header', key)];
-      delete entries[styleKey('column', key)];
-      continue;
-    }
-    entries[styleKey('header', key)] = { kind: 'header', key, bg: preset.header, color: preset.color };
-    entries[styleKey('column', key)] = { kind: 'column', key, bg: preset.body, color: preset.color };
-  }
-
-  return { entries, keys };
 }

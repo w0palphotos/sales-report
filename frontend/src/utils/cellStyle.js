@@ -3,6 +3,19 @@
 
 export const DEFAULT_TEXT = '#2f3437';
 
+// Kunci sintetis untuk baris/kolom Grand Total pada aturan gaya posisional.
+export const TOTAL_KEY = '__total__';
+
+// Normalisasi input warna ke `#rrggbb`, atau null bila bukan hex valid.
+export function normalizeHex(value) {
+  const raw = String(value ?? '').trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(raw)) {
+    return `#${raw.split('').map((c) => c + c).join('').toLowerCase()}`;
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(raw)) return `#${raw.toLowerCase()}`;
+  return null;
+}
+
 export class CellFont {
   constructor(text) {
     this.text = text;

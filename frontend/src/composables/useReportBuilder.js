@@ -2,7 +2,7 @@ import { reactive, ref, computed, watch } from 'vue';
 import { api } from '../api/client.js';
 import { buildXlsxBuffer } from '../utils/xlsxExport.js';
 import { tableStylesToMap, styleKey } from '../utils/cellStyle.js';
-import { presetStyleEntries } from '../utils/tablePresets.js';
+import { presetOwnedKeys, normalizePreset } from '../utils/tablePresets.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? {}));
 
@@ -50,6 +50,7 @@ function normalizeSavedConfig(rawConfig, metaData) {
       config.colors && typeof config.colors === 'object' ? clone(config.colors) : {},
     styles:
       config.styles && typeof config.styles === 'object' ? clone(config.styles) : {},
+    preset: normalizePreset(config.preset),
   };
 }
 
@@ -70,6 +71,7 @@ export function useReportBuilder() {
     filters: [],
     colors: {},
     styles: {},
+    preset: null,
   });
 
   const globalColors = ref({});
@@ -98,14 +100,16 @@ export function useReportBuilder() {
       })),
     colors: clone(config.colors),
     styles: clone(config.styles),
+    preset: config.preset ?? null,
   });
 
-  // Payload bersih untuk backend: tanpa colors/styles (hanya urusan tampil),
+  // Payload bersih untuk backend: tanpa colors/styles/preset (hanya urusan tampil),
   // agar ubah warna laporan tidak memicu fetch sia-sia.
   const backendPayload = () => {
     const payload = configToPayload();
     delete payload.colors;
     delete payload.styles;
+    delete payload.preset;
     return payload;
   };
 
@@ -185,6 +189,7 @@ export function useReportBuilder() {
     config.filters = [];
     config.colors = {};
     config.styles = {};
+    config.preset = null;
     result.value = null;
     error.value = null;
     lastPayloadJson = null;
@@ -346,26 +351,25 @@ export function useReportBuilder() {
   async function resetTableColors() {
     config.colors = {};
     config.styles = {};
+    config.preset = null;
     await saveGlobalColors([]);
     await saveGlobalTableStyles([]);
   }
 
-  // Terapkan preset warna tabel: hanya mengubah gaya kolom/header milik preset,
-  // membiarkan warna per sel/baris yang sudah diatur manual.
-  function applyTablePreset(presetKey) {
-    const meta = result.value?.meta;
-    if (!meta) return;
-    const { entries, keys } = presetStyleEntries(presetKey, {
-      meta,
-      columnKeys: result.value?.columnKeys ?? [],
-    });
+  // Terapkan preset warna tabel. Preset bisa berupa kunci bawaan atau objek
+  // warna kustom, disimpan dan dihitung saat render sehingga baris/kolom baru
+  // otomatis mengikuti. Aturan kolom lama milik preset dibersihkan.
+  function applyTablePreset(preset) {
     const styles = clone(config.styles);
-    for (const key of keys) {
-      delete styles[styleKey('header', key)];
-      delete styles[styleKey('column', key)];
+    const meta = result.value?.meta;
+    if (meta) {
+      for (const key of presetOwnedKeys(meta, result.value?.columnKeys ?? [])) {
+        delete styles[styleKey('header', key)];
+        delete styles[styleKey('column', key)];
+      }
     }
-    Object.assign(styles, entries);
     config.styles = styles;
+    config.preset = normalizePreset(preset);
   }
 
   async function deleteSaved(id) {
