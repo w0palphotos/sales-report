@@ -122,7 +122,7 @@ const columnOptionsFor = () =>
           />
         </div>
         <button
-          v-if="config.values.length < 3"
+          v-if="config.values.length < 8"
           type="button"
           class="btn btn-ghost btn-small"
           title="Tambah nilai"

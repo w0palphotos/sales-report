@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import AggregationSelect from './AggregationSelect.vue';
 
 const props = defineProps({
   value: { type: Object, required: true },
@@ -15,16 +16,6 @@ function patch(patchObject) {
 
 const currentField = computed(() => {
   return (props.meta?.measures ?? []).find((m) => m.key === props.value.field);
-});
-
-const availableAggregations = computed(() => {
-  const isText = currentField.value?.type === 'text';
-  return (props.meta?.aggregations ?? []).filter((agg) => {
-    if (isText) {
-      return agg.allowedTypes ? agg.allowedTypes.includes('text') : agg.key === 'count';
-    }
-    return true;
-  });
 });
 
 function onFieldChange(event) {
@@ -52,11 +43,14 @@ function onFieldChange(event) {
         {{ measure.label }}
       </option>
     </select>
-    <select :value="value.aggregation" @change="patch({ aggregation: $event.target.value })">
-      <option v-for="aggregation in availableAggregations" :key="aggregation.key" :value="aggregation.key">
-        {{ aggregation.label }}
-      </option>
-    </select>
+    <AggregationSelect
+      :model-value="value.aggregation"
+      :aggregations="meta?.aggregations ?? []"
+      :field-type="currentField?.type ?? 'number'"
+      :field-label="currentField?.label ?? ''"
+      @update:model-value="patch({ aggregation: $event })"
+    />
+
     <button
       type="button"
       class="chip-remove"

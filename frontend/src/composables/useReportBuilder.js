@@ -21,12 +21,25 @@ function toColorMap(list) {
 }
 
 // Normalisasi config laporan tersimpan (lama/baru) ke bentuk state kini.
-function normalizeSavedConfig(rawConfig) {
+function normalizeSavedConfig(rawConfig, metaData) {
   const config = rawConfig ?? {};
+
+  // Pastikan agregasi valid untuk tipe datanya
+  const values = (config.values ?? []).map((v) => {
+    const measure = (metaData?.measures ?? []).find((m) => m.key === v.field);
+    const agg = (metaData?.aggregations ?? []).find((a) => a.key === v.aggregation);
+
+    let aggregation = v.aggregation;
+    if (measure && agg && agg.allowedTypes && !agg.allowedTypes.includes(measure.type)) {
+      aggregation = measure.type === 'text' ? 'count' : 'sum';
+    }
+    return { field: v.field, aggregation };
+  });
+
   return {
     rows: config.rows ?? [],
     columns: config.columns ?? [],
-    values: config.values ?? [],
+    values: values,
     // Laporan lama: buang operator, satukan nilai 'between'.
     filters: (config.filters ?? []).map((filter) => ({
       field: filter.field ?? '',
@@ -46,6 +59,8 @@ export function useReportBuilder() {
   const error = ref(null);
   const result = ref(null);
   const savedReports = ref([]);
+
+  const MAX_VALUES = 8;
 
   const config = reactive({
     rows: [],
@@ -201,13 +216,31 @@ export function useReportBuilder() {
   }
 
   function addValue() {
-    if (config.values.length >= 3) return;
-    const defaultMeasure = meta.value?.measures?.[0]?.key || 'amount';
-    config.values.push({ field: defaultMeasure, aggregation: 'sum' });
+    if (config.values.length >= MAX_VALUES) return;
+    const measure = meta.value?.measures?.[0];
+    const field = measure?.key || 'amount';
+    const type = measure?.type || 'number';
+    const aggregation = type === 'text' ? 'count' : 'sum';
+    // avoid duplicate same field+aggregation
+    if (config.values.some((v) => v.field === field && v.aggregation === aggregation)) return;
+    config.values.push({ field, aggregation });
   }
 
   function updateValue(index, patch) {
-    Object.assign(config.values[index], patch);
+    const item = config.values[index];
+    if (patch.field && patch.field !== item.field) {
+      const targetField = (meta.value?.measures ?? []).find((m) => m.key === patch.field);
+      const isText = targetField?.type === 'text';
+      if (isText) {
+        patch.aggregation = 'count';
+      }
+      // if switching field causes aggregation to be incompatible, fix it
+      const aggDef = meta.value?.aggregations?.find((a) => a.key === (patch.aggregation ?? item.aggregation));
+      if (aggDef && aggDef.allowedTypes && !aggDef.allowedTypes.includes(targetField?.type)) {
+        patch.aggregation = targetField?.type === 'text' ? 'count' : 'sum';
+      }
+    }
+    Object.assign(item, patch);
   }
 
   function removeValue(index) {
@@ -246,7 +279,7 @@ export function useReportBuilder() {
   }
 
   function loadReport(report) {
-    Object.assign(config, normalizeSavedConfig(report.config));
+    Object.assign(config, normalizeSavedConfig(report.config, meta.value));
     result.value = null;
     error.value = null;
   }
@@ -326,7 +359,7 @@ export function useReportBuilder() {
         clearTimeout(runTimeout);
         runTimeout = setTimeout(() => {
           run();
-        }, 300);
+        }, 250);
       } else {
         clearTimeout(runTimeout);
         result.value = null;
