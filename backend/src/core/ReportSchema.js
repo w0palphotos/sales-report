@@ -28,6 +28,8 @@ export class Measure extends Field {
 const AGGREGATIONS = new Map([
   ['sum', { label: 'Total', sql: (c) => `SUM(${c})`, allowedTypes: ['number'] }],
   ['avg', { label: 'Rata-rata', sql: (c) => `AVG(${c})`, allowedTypes: ['number'] }],
+  ['min', { label: 'Minimum', sql: (c) => `MIN(${c})`, allowedTypes: ['number'] }],
+  ['max', { label: 'Maksimum', sql: (c) => `MAX(${c})`, allowedTypes: ['number'] }],
   ['count', {
     label: 'Jumlah Transaksi',
     sql: (c) => (c && c !== '*' ? `COUNT(${c})` : 'COUNT(*)'),

@@ -44,7 +44,8 @@ export class QueryBuilder {
     }
     if (rows.length > 3) throw new ValidationError('Maksimal tiga field baris.');
     if (columns.length > 1) throw new ValidationError('Maksimal satu field sebagai kolom.');
-    if (values.length > 3) throw new ValidationError('Maksimal tiga nilai.');
+    const MAX_VALUES = 8;
+    if (values.length > MAX_VALUES) throw new ValidationError(`Maksimal ${MAX_VALUES} nilai.`);
 
     for (const key of rows) {
       if (!this.schema.getDimension(key)) {
