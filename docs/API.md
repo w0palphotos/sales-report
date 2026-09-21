@@ -249,7 +249,7 @@ Keterangan struktur response:
 
 Sama seperti `/api/reports`, tetapi mengembalikan file CSV sebagai attachment.
 
-> **Catatan:** UI frontend sekarang menggunakan export file **Excel (.xlsx)** yang dibuat langsung di browser via SheetJS (`xlsx`) sesuai dengan format pivot tabel yang aktif. Endpoint `/api/reports/export` ini tetap tersedia di backend untuk kebutuhan programmatic (skrip, curl, integrasi).
+> **Catatan:** UI frontend memakai export file **Excel (.xlsx)** yang dibuat di browser memakai ExcelJS. Tabel pivot dan grafik chart native ditulis menyatu dalam satu sheet **"Laporan Penjualan"** (data grafik diletakkan di bawah tabel). Endpoint `/api/reports/export` ini tetap tersedia di backend untuk kebutuhan programmatic (skrip, curl, integrasi).
 
 **Request:**
 
@@ -361,7 +361,9 @@ Aturan global di endpoint ini hanya menerima `kind` `row` dan `column`. Dua jeni
 - `header:<key>`: warna khusus baris header kolom, menimpa aturan `column` untuk kolom yang sama.
 - `cell:<rowSignature>::<columnId>`: warna satu sel nilai tertentu, menimpa aturan baris dan kolom.
 
-Contoh nilai `key`: `rowdim:city`, `col:city:Jakarta`, `val:amount:max`, atau `cell:product=Honda::val:amount:max`.
+Contoh nilai `key`: `rowdim:city`, `col:city:Jakarta`, `val:amount:max`, atau `cell:product=Honda::val:amount:max`. Baris dan kolom Grand Total memakai kunci `__total__`, mis. `row:__total__` atau `col:city:__total__`.
+
+Preset warna tabel disimpan sebagai `config.preset`: kunci bawaan (mis. `biru`) atau objek warna kustom `{ header, body, color }`. Nilainya dihitung saat render sehingga baris dan kolom baru otomatis mengikuti preset. Pada dashboard, `config.preset` ikut disimpan di localStorage sehingga tetap terpasang setelah halaman di-refresh.
 
 Mengirim `PUT /api/colors` atau `PUT /api/table-styles` dengan array kosong (`[]`) menghapus seluruh aturan. Fitur "Reset warna" di UI memakai kedua panggilan itu untuk mengembalikan tabel ke warna default aplikasi.
 

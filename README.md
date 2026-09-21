@@ -22,10 +22,10 @@ Dibangun untuk technical interview assignment:
 | Tabel dinamis | Header berlapis, kolom + baris total, spreadsheet-like grid dengan sorting & filtering (Handsontable) |
 | Sorting | Klik header kolom (asc / desc / none) |
 | Grafik | Bar chart dari hasil laporan (Chart.js) |
-| Export XLSX | Unduh hasil laporan sebagai file Excel (.xlsx) dengan sheet pivot table dan sheet visualisasi berisi grafik chart native yang otomatis ter-update saat data diedit |
+| Export XLSX | Unduh hasil laporan sebagai file Excel (.xlsx) dalam satu sheet "Laporan Penjualan": tabel pivot dengan grafik chart native tepat di bawahnya, dan grafik otomatis ter-update saat data diedit |
 | Laporan tersimpan | Simpan / muat / hapus konfigurasi laporan dengan nama |
 | Input Data | UI untuk entry manual atau bulk upload via file (.csv, .xlsx) |
-| Warna tabel | Isian warna per sel, baris, atau kolom lewat menu klik kanan, dengan preset warna tabel dan reset warna |
+| Warna tabel | Isian warna per sel, baris, atau kolom lewat menu klik kanan, preset warna tabel bawaan maupun kustom, dan reset warna |
 
 Semua kombinasi laporan ditangani oleh **satu mekanisme query** — tidak ada query yang ditulis khusus per laporan.
 
