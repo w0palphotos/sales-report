@@ -36,18 +36,22 @@ Endpoint `/api/reports` dan `/api/reports/export` menerima satu objek konfiguras
 |---|---|---|
 | `rows` | `string[]` | Dimensi pengelompokan. Wajib 1–3. Boleh: `sales_name`, `city`, `product`. |
 | `columns` | `string[]` | Dimensi horizontal. Opsional, maksimal 1. |
-| `values` | `object[]` | Wajib 1–3. Setiap item `{ field, aggregation }`. |
+| `values` | `object[]` | Wajib 1–8. Setiap item `{ field, aggregation }`. |
 | `filters` | `object[]` | Opsional, jumlah bebas. Setiap item `{ field, operator, value }`. |
 
 `values[].field` (measure): `amount` (Penjualan).
 
 `values[].aggregation`:
 
-| Key | Label |
-|---|---|
-| `sum` | Total |
-| `avg` | Rata-rata |
-| `count` | Jumlah Transaksi |
+| Key | Label | Tipe field yang berlaku |
+|---|---|---|
+| `sum` | Total | angka |
+| `avg` | Rata-rata | angka |
+| `min` | Minimum | angka |
+| `max` | Maksimum | angka |
+| `count` | Jumlah Transaksi | teks dan angka |
+
+`sum`, `avg`, `min`, dan `max` hanya berlaku untuk measure angka. Memakainya pada field teks ditolak dengan `400`, misalnya `Perhitungan "sum" tidak berlaku untuk field "city" (text)`. Untuk field teks, pakai `count`. Di UI, label `count` untuk field teks mengikuti nama field, misalnya `Jumlah Kota`.
 
 `filters[].operator` dan kompatibilitas tipe field:
 
@@ -101,6 +105,8 @@ Metadata untuk membangun kontrol UI: daftar dimensi (beserta nilainya), measure,
   "aggregations": [
     { "key": "sum", "label": "Total" },
     { "key": "avg", "label": "Rata-rata" },
+    { "key": "min", "label": "Minimum" },
+    { "key": "max", "label": "Maksimum" },
     { "key": "count", "label": "Jumlah Transaksi" }
   ],
   "operators": [
@@ -350,6 +356,15 @@ data, `key` = signature isi baris) atau `column` (`key` = `col:<field>:<nilai>`,
 
 **Response `200`:** daftar segar `{ "styles": [...] }`. Validasi gagal → `400` dan data lama utuh.
 
+Aturan global di endpoint ini hanya menerima `kind` `row` dan `column`. Dua jenis warna lain hanya hidup di `config.styles` pada laporan tersimpan, bukan di `table_styles`:
+
+- `header:<key>`: warna khusus baris header kolom, menimpa aturan `column` untuk kolom yang sama.
+- `cell:<rowSignature>::<columnId>`: warna satu sel nilai tertentu, menimpa aturan baris dan kolom.
+
+Contoh nilai `key`: `rowdim:city`, `col:city:Jakarta`, `val:amount:max`, atau `cell:product=Honda::val:amount:max`.
+
+Mengirim `PUT /api/colors` atau `PUT /api/table-styles` dengan array kosong (`[]`) menghapus seluruh aturan. Fitur "Reset warna" di UI memakai kedua panggilan itu untuk mengembalikan tabel ke warna default aplikasi.
+
 ---
 
 ### POST `/api/sales`
@@ -424,5 +439,7 @@ Validation error.
 | Contoh 4 — Total per Sales dan Kota | `{"rows":["sales_name"],"columns":["city"],"values":[{"field":"amount","aggregation":"sum"}],"filters":[]}` |
 | Contoh 8 — Rata-rata per Sales | `{"rows":["sales_name"],"columns":[],"values":[{"field":"amount","aggregation":"avg"}],"filters":[]}` |
 | Contoh 10 — Total dan Rata-rata per Produk | `{"rows":["product"],"columns":[],"values":[{"field":"amount","aggregation":"sum"},{"field":"amount","aggregation":"avg"}],"filters":[]}` |
+| Maksimum per Produk | `{"rows":["product"],"columns":[],"values":[{"field":"amount","aggregation":"max"}],"filters":[]}` |
+| Minimum per Kota | `{"rows":["city"],"columns":[],"values":[{"field":"amount","aggregation":"min"}],"filters":[]}` |
 | Filter harga > Rp80.000.000 | `{"rows":["city"],"columns":[],"values":[{"field":"amount","aggregation":"sum"}],"filters":[{"field":"amount","operator":">","value":80000000}]}` |
 | Kombinasi dinamis baru | `{"rows":["product"],"columns":["sales_name"],"values":[{"field":"amount","aggregation":"avg"}],"filters":[{"field":"city","operator":"=","value":"Jakarta"}]}` |
