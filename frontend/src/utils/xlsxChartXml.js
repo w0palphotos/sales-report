@@ -13,11 +13,13 @@ const AXIS_ID_VAL = 154211840;
 
 const PALETTE = ['2F3437', '1F6C9F', '346538', '956400', '9F2F2D', '787774'];
 
-const CHART_PATH = 'xl/charts/chart1.xml';
+// Satu sheet saja: tabel pivot dan chart menyatu di "Laporan Penjualan".
+const SHEET_NAME = 'Laporan Penjualan';
+const SHEET_PATH = 'xl/worksheets/sheet1.xml';
 const DRAWING_PATH = 'xl/drawings/drawing1.xml';
 const DRAWING_RELS_PATH = 'xl/drawings/_rels/drawing1.xml.rels';
-const SHEET_RELS_PATH = 'xl/worksheets/_rels/sheet2.xml.rels';
-const SHEET_PATH = 'xl/worksheets/sheet2.xml';
+const SHEET_RELS_PATH = 'xl/worksheets/_rels/sheet1.xml.rels';
+const CHART_PATH = 'xl/charts/chart1.xml';
 const CONTENT_TYPES_PATH = '[Content_Types].xml';
 
 function escapeXml(value) {
@@ -29,28 +31,15 @@ function escapeXml(value) {
     .replace(/'/g, '&apos;');
 }
 
-// Geometry: which Visualisasi cells the series span, and where the frame sits.
-// Header occupies row 1, so data starts at row 2. Frame is anchored right of the table.
-function chartBounds(numRows, numSeries) {
-  const startRow = 2;
-  return {
-    startRow,
-    endRow: startRow + numRows - 1,
-    fromCol: numSeries + 2,
-    toCol: numSeries + 2 + 11,
-    anchorEndRow: 18,
-  };
-}
-
 function cachePoints(items, toValue) {
   return items.map((item, i) => `<c:pt idx="${i}"><c:v>${toValue(item)}</c:v></c:pt>`).join('');
 }
 
 // One <c:ser> block: name + color + category range + value range.
 // catRange is identical for every series, so the caller computes it once.
-function seriesXml(series, index, catRange, bounds, numRows, categories) {
-  const valRange = `'Visualisasi'!$${series.colLetter}$${bounds.startRow}:$${series.colLetter}$${bounds.endRow}`;
-  const nameCell = `'Visualisasi'!$${series.colLetter}$1`;
+function seriesXml(series, index, catRange, geom, numRows, categories) {
+  const valRange = `'${SHEET_NAME}'!$${series.colLetter}$${geom.startRow}:$${series.colLetter}$${geom.endRow}`;
+  const nameCell = `'${SHEET_NAME}'!$${series.colLetter}$${geom.headerRow}`;
   const color = PALETTE[index % PALETTE.length];
 
   return `
@@ -93,11 +82,11 @@ function seriesXml(series, index, catRange, bounds, numRows, categories) {
         </c:ser>`;
 }
 
-function chartXml(title, seriesList, categories, bounds) {
+function chartXml(title, seriesList, categories, geom) {
   const numRows = categories.length;
-  const catRange = `'Visualisasi'!$A$${bounds.startRow}:$A$${bounds.endRow}`;
+  const catRange = `'${SHEET_NAME}'!$A$${geom.startRow}:$A$${geom.endRow}`;
   const serBlocks = seriesList
-    .map((series, i) => seriesXml(series, i, catRange, bounds, numRows, categories))
+    .map((series, i) => seriesXml(series, i, catRange, geom, numRows, categories))
     .join('');
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -176,20 +165,20 @@ function chartXml(title, seriesList, categories, bounds) {
 </c:chartSpace>`;
 }
 
-function drawingXml(bounds) {
+function drawingXml(geom) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <xdr:twoCellAnchor>
     <xdr:from>
-      <xdr:col>${bounds.fromCol}</xdr:col>
+      <xdr:col>${geom.anchorFromCol}</xdr:col>
       <xdr:colOff>0</xdr:colOff>
-      <xdr:row>1</xdr:row>
+      <xdr:row>${geom.anchorRowStart}</xdr:row>
       <xdr:rowOff>0</xdr:rowOff>
     </xdr:from>
     <xdr:to>
-      <xdr:col>${bounds.toCol}</xdr:col>
+      <xdr:col>${geom.anchorEndCol}</xdr:col>
       <xdr:colOff>0</xdr:colOff>
-      <xdr:row>${bounds.anchorEndRow}</xdr:row>
+      <xdr:row>${geom.anchorRowEnd}</xdr:row>
       <xdr:rowOff>0</xdr:rowOff>
     </xdr:to>
     <xdr:graphicFrame macro="">
@@ -212,12 +201,16 @@ function drawingXml(bounds) {
 </xdr:wsDr>`;
 }
 
-// drawingRels + sheet2Rels were near-duplicates; one builder covers both.
-function relsXml(type, target) {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="${type}" Target="${target}"/>
-</Relationships>`;
+const RELS_HEADER =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+  '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+
+function relFragment(id, type, target) {
+  return `<Relationship Id="${id}" Type="${type}" Target="${target}"/>`;
+}
+
+function relsDoc(fragment) {
+  return `${RELS_HEADER}${fragment}</Relationships>`;
 }
 
 async function patchSheetDrawing(zip) {
@@ -225,6 +218,19 @@ async function patchSheetDrawing(zip) {
   if (!sheetXml.includes('<drawing')) {
     zip.file(SHEET_PATH, sheetXml.replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>'));
   }
+}
+
+// Merge into an existing sheet rels file when present, so we do not drop
+// other relationships ExcelJS may have written.
+async function patchSheetRels(zip, fragment) {
+  const existing = zip.file(SHEET_RELS_PATH);
+  if (!existing) {
+    zip.file(SHEET_RELS_PATH, relsDoc(fragment));
+    return;
+  }
+  const xml = await existing.async('text');
+  if (xml.includes('drawing1.xml')) return;
+  zip.file(SHEET_RELS_PATH, xml.replace('</Relationships>', `${fragment}</Relationships>`));
 }
 
 async function patchContentTypes(zip) {
@@ -237,19 +243,17 @@ async function patchContentTypes(zip) {
   }
 }
 
-// Main entry: inject a native clustered column chart bound to the Visualisasi
-// flat table. Returns false when there is nothing to chart (caller still
-// produces a valid .xlsx, just without a chart).
-export async function injectNativeChart(zip, { seriesList, categories, title = 'Visualisasi Penjualan' }) {
+// Main entry: inject a native clustered column chart bound to the flat chart
+// block on the same "Laporan Penjualan" sheet. Returns false when there is
+// nothing to chart (caller still produces a valid .xlsx, just without a chart).
+export async function injectNativeChart(zip, { seriesList, categories, geom, title = 'Visualisasi Penjualan' }) {
   if (categories.length === 0 || seriesList.length === 0) return false;
 
-  const bounds = chartBounds(categories.length, seriesList.length);
+  zip.file(CHART_PATH, chartXml(title, seriesList, categories, geom));
+  zip.file(DRAWING_PATH, drawingXml(geom));
+  zip.file(DRAWING_RELS_PATH, relsDoc(relFragment('rId1', REL_TYPE.chart, '../charts/chart1.xml')));
 
-  zip.file(CHART_PATH, chartXml(title, seriesList, categories, bounds));
-  zip.file(DRAWING_PATH, drawingXml(bounds));
-  zip.file(DRAWING_RELS_PATH, relsXml(REL_TYPE.chart, '../charts/chart1.xml'));
-  zip.file(SHEET_RELS_PATH, relsXml(REL_TYPE.drawing, '../drawings/drawing1.xml'));
-
+  await patchSheetRels(zip, relFragment('rId1', REL_TYPE.drawing, '../drawings/drawing1.xml'));
   await patchSheetDrawing(zip);
   await patchContentTypes(zip);
   return true;

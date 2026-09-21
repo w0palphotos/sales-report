@@ -1,5 +1,5 @@
 import { injectNativeChart } from './xlsxChartXml.js';
-import { resolveColor, resolveTableStyle, rowSignature } from './cellStyle.js';
+import { resolveColor, resolveTableStyle, rowSignature, TOTAL_KEY } from './cellStyle.js';
 
 function colToLetter(index) {
   let temp = index;
@@ -156,6 +156,14 @@ function addPivotHeaders(ws, layout, colors = {}, styles = {}) {
       if (fill) topRow.getCell(pos).fill = fill;
       pos += Math.max(1, valCount);
     }
+    // Header grup Grand Total.
+    const grandStyle = resolveTableStyle(
+      'column',
+      `col:${layout.columnField.key}:${TOTAL_KEY}`,
+      styles,
+    );
+    const grandFill = fillFor(grandStyle?.bg);
+    if (grandFill) topRow.getCell(pos).fill = grandFill;
     // Sub-header measure (baris 2, Grand Total dikecualikan).
     const subRow = ws.getRow(2);
     for (let g = 0; g < columnKeys.length; g++) {
@@ -253,13 +261,17 @@ function addPivotSheet(wb, layout, colors = {}, styles = {}) {
     // Preseden sel nilai: baris > kolom (grup lalu measure) > tint lama. Grand Total ikut baris.
     const valueCellCount = added.cellCount - rowFieldCount;
     for (let k = 0; k < valueCellCount; k++) {
+      const groupIdx = layout.valCount === 0 ? -1 : Math.floor(k / layout.valCount);
       const ck =
-        layout.valCount === 0 ? undefined : layout.columnKeys[Math.floor(k / layout.valCount)];
+        groupIdx >= 0 && groupIdx < layout.columnKeys.length ? layout.columnKeys[groupIdx] : null;
       const vc = layout.valueColumns[layout.valCount === 0 ? 0 : k % layout.valCount];
       let style = rowStyle?.bg ? rowStyle : null;
-      if (!style && ck != null && layout.columnField) {
-        style =
-          resolveTableStyle('column', `col:${layout.columnField.key}:${ck}`, styles) ?? null;
+      if (!style && layout.columnField && groupIdx >= 0) {
+        const groupKey =
+          ck != null
+            ? `col:${layout.columnField.key}:${ck}`
+            : `col:${layout.columnField.key}:${TOTAL_KEY}`;
+        style = resolveTableStyle('column', groupKey, styles) ?? null;
       }
       if (!style && vc) {
         style =
@@ -282,9 +294,13 @@ function addPivotSheet(wb, layout, colors = {}, styles = {}) {
     const footer = ws.addRow(pivotFooterLine(layout));
     styleHeader(footer);
     formatNumericCells(footer, layout.rowFields.length + 1);
+    const totalStyle = resolveTableStyle('row', TOTAL_KEY, styles);
+    const totalFill = fillFor(totalStyle?.bg);
+    if (totalFill) footer.eachCell((cell) => { cell.fill = totalFill; });
   }
 
   applyGridStyle(ws, 20);
+  return ws;
 }
 
 // Flat model for the Visualisasi sheet: one category per pivot row,
@@ -318,18 +334,26 @@ function buildVizModel(layout) {
   };
 }
 
-function addVizSheet(wb, layout) {
-  const ws = wb.addWorksheet('Visualisasi', { views: [{ showGridLines: true }] });
+// Blok data datar untuk chart, ditulis di bawah tabel pivot pada sheet yang sama.
+function addVizBlock(ws, layout, startRow) {
   const { header, categories, seriesList } = buildVizModel(layout);
 
-  styleHeader(ws.addRow(header));
-  for (let rIdx = 0; rIdx < layout.rows.length; rIdx++) {
-    const added = ws.addRow([categories[rIdx], ...seriesList.map((s) => s.data[rIdx] ?? 0)]);
+  const headerRow = ws.getRow(startRow);
+  headerRow.values = header;
+  styleHeader(headerRow);
+
+  for (let rIdx = 0; rIdx < categories.length; rIdx++) {
+    const added = ws.getRow(startRow + 1 + rIdx);
+    added.values = [categories[rIdx], ...seriesList.map((s) => s.data[rIdx] ?? 0)];
     formatNumericCells(added, 2);
   }
 
-  applyGridStyle(ws, 22);
-  return { categories, seriesList };
+  return {
+    startRow,
+    endRow: startRow + categories.length,
+    categories,
+    seriesList,
+  };
 }
 
 export async function buildXlsxBuffer(report, colors = {}, tableStyles = {}) {
@@ -342,14 +366,32 @@ export async function buildXlsxBuffer(report, colors = {}, tableStyles = {}) {
   wb.creator = 'Sales Report Builder';
   wb.created = new Date();
 
-  addPivotSheet(wb, layout, cls, sty);
-  const viz = addVizSheet(wb, layout);
+  const ws = addPivotSheet(wb, layout, cls, sty);
+
+  // Visualisasi menyatu di sheet yang sama, tepat di bawah tabel dengan margin.
+  const anchorRowStart = ws.rowCount + 1; // 0-based: sisakan satu baris kosong
+  const anchorRowEnd = anchorRowStart + 18;
+  const vizStart = anchorRowEnd + 3; // data datar chart diletakkan di bawah chart
+  const viz = addVizBlock(ws, layout, vizStart);
+  applyGridStyle(ws, 20);
 
   const zip = await JSZip.loadAsync(await wb.xlsx.writeBuffer());
 
   // ExcelJS cannot author charts: inject a native OpenXML chart bound to the
-  // Visualisasi flat table. Empty reports simply skip the chart.
-  await injectNativeChart(zip, viz);
+  // flat chart block on the same "Laporan Penjualan" sheet.
+  await injectNativeChart(zip, {
+    seriesList: viz.seriesList,
+    categories: viz.categories,
+    geom: {
+      headerRow: viz.startRow,
+      startRow: viz.startRow + 1,
+      endRow: viz.endRow,
+      anchorFromCol: 0,
+      anchorEndCol: 11,
+      anchorRowStart,
+      anchorRowEnd,
+    },
+  });
 
   return zip.generateAsync({ type: 'blob' });
 }
