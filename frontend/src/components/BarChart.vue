@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 import { formatCompact } from '../utils/format.js';
 import { resolveColor, resolveTableStyle, rowSignature } from '../utils/cellStyle.js';
+import DropdownSelect from './DropdownSelect.vue';
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
@@ -103,6 +104,10 @@ const isCurrentCount = computed(() => {
   return valueColumns.value[valueIndex.value]?.aggregation === 'count';
 });
 
+const chartValueOptions = computed(() =>
+  valueColumns.value.map((valueColumn, index) => ({ value: index, label: valueColumn.label })),
+);
+
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -146,11 +151,14 @@ const chartOptions = computed(() => ({
   <div class="chart" v-if="result">
     <div v-if="valueColumns.length > 1" class="chart-control">
       <span class="field-label">Nilai yang digambar</span>
-      <select v-model="valueIndex">
-        <option v-for="(valueColumn, index) in valueColumns" :key="index" :value="index">
-          {{ valueColumn.label }}
-        </option>
-      </select>
+      <div class="chart-picker">
+        <DropdownSelect
+          :model-value="valueIndex"
+          :options="chartValueOptions"
+          aria-label="Pilih nilai yang digambar"
+          @update:model-value="valueIndex = Number($event)"
+        />
+      </div>
     </div>
     <div class="chart-canvas">
       <Bar :data="chartData" :options="chartOptions" />
@@ -166,8 +174,8 @@ const chartOptions = computed(() => ({
   margin-bottom: 16px;
 }
 
-.chart-control select {
-  width: auto;
+.chart-picker {
+  flex: 0 1 260px;
   min-width: 200px;
 }
 

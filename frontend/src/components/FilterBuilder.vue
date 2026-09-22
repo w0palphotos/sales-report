@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import DropdownSelect from './DropdownSelect.vue';
 
 const props = defineProps({
   filter: { type: Object, required: true },
@@ -22,6 +23,21 @@ const field = computed(() => {
 
 const fieldValues = computed(() => field.value?.values ?? []);
 
+const fieldOptions = computed(() => [
+  ...(props.meta?.dimensions ?? []).map((dimension) => ({
+    value: dimension.key,
+    label: dimension.label,
+  })),
+  ...(props.meta?.measures ?? []).map((measure) => ({
+    value: measure.key,
+    label: measure.label,
+  })),
+]);
+
+const valueOptions = computed(() =>
+  fieldValues.value.map((value) => ({ value, label: value })),
+);
+
 // Operator implisit '=' untuk semua filter; tidak ada lagi dropdown operator.
 // Peninggalan 'between' (value array) dinormalisasi ke nilai tunggal.
 const singleValue = computed(() =>
@@ -32,31 +48,29 @@ function patch(patchObject) {
   emit('update', patchObject);
 }
 
-function onFieldChange(event) {
-  patch({ field: event.target.value, value: '' });
+function onFieldChange(value) {
+  patch({ field: value, value: '' });
 }
 </script>
 
 <template>
   <div class="filter-row">
-    <select :value="filter.field" @change="onFieldChange">
-      <option value="" disabled>Field</option>
-      <option v-for="dimension in meta?.dimensions ?? []" :key="dimension.key" :value="dimension.key">
-        {{ dimension.label }}
-      </option>
-      <option v-for="measure in meta?.measures ?? []" :key="measure.key" :value="measure.key">
-        {{ measure.label }}
-      </option>
-    </select>
+    <DropdownSelect
+      :model-value="filter.field"
+      :options="fieldOptions"
+      placeholder="Field"
+      aria-label="Pilih field filter"
+      @update:model-value="onFieldChange"
+    />
 
-    <select
+    <DropdownSelect
       v-if="field?.type === 'text' && fieldValues.length > 0"
-      :value="singleValue"
-      @change="patch({ value: $event.target.value })"
-    >
-      <option value="" disabled>Pilih nilai</option>
-      <option v-for="value in fieldValues" :key="value" :value="value">{{ value }}</option>
-    </select>
+      :model-value="singleValue"
+      :options="valueOptions"
+      placeholder="Pilih nilai"
+      aria-label="Pilih nilai filter"
+      @update:model-value="patch({ value: $event })"
+    />
 
     <input
       v-else-if="field?.type === 'text'"

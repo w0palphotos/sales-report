@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import FieldSelect from './FieldSelect.vue';
+import DropdownSelect from './DropdownSelect.vue';
 import ValueBuilder from './ValueBuilder.vue';
 
 const props = defineProps({
@@ -55,11 +55,12 @@ const columnOptionsFor = () =>
       <div class="sheet-control-group">
         <span class="sheet-label">Baris:</span>
         <div v-for="(row, index) in config.rows" :key="'row-' + index" class="sheet-select-wrap">
-          <FieldSelect
+          <DropdownSelect
             :model-value="row"
             :options="rowOptionsFor(index)"
             placeholder="(Tanpa Baris)"
             :allow-clear="true"
+            aria-label="Pilih dimensi baris"
             @update:model-value="emit('set-row', index, $event)"
           />
           <button
@@ -88,11 +89,12 @@ const columnOptionsFor = () =>
       <div class="sheet-control-group">
         <span class="sheet-label">Kolom:</span>
         <div class="sheet-select-wrap">
-          <FieldSelect
+          <DropdownSelect
             :model-value="config.columns[0] ?? ''"
             :options="columnOptionsFor()"
             placeholder="(Tanpa Kolom)"
             :allow-clear="true"
+            aria-label="Pilih dimensi kolom"
             @update:model-value="$event ? emit('set-column', $event) : emit('clear-column')"
           />
           <button

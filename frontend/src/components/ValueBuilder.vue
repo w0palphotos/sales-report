@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import DropdownSelect from './DropdownSelect.vue';
 import AggregationSelect from './AggregationSelect.vue';
 
 const props = defineProps({
@@ -18,8 +19,11 @@ const currentField = computed(() => {
   return (props.meta?.measures ?? []).find((m) => m.key === props.value.field);
 });
 
-function onFieldChange(event) {
-  const newFieldKey = event.target.value;
+const measureOptions = computed(() =>
+  (props.meta?.measures ?? []).map((measure) => ({ value: measure.key, label: measure.label })),
+);
+
+function onFieldChange(newFieldKey) {
   if (!newFieldKey) {
     emit('remove');
     return;
@@ -37,12 +41,14 @@ function onFieldChange(event) {
 
 <template>
   <div class="value-row">
-    <select :value="value.field" @change="onFieldChange">
-      <option value="">(Tanpa Nilai)</option>
-      <option v-for="measure in meta?.measures ?? []" :key="measure.key" :value="measure.key">
-        {{ measure.label }}
-      </option>
-    </select>
+    <DropdownSelect
+      :model-value="value.field"
+      :options="measureOptions"
+      placeholder="(Tanpa Nilai)"
+      :allow-clear="true"
+      aria-label="Pilih measure"
+      @update:model-value="onFieldChange"
+    />
     <AggregationSelect
       :model-value="value.aggregation"
       :aggregations="meta?.aggregations ?? []"
