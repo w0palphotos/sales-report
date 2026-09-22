@@ -68,7 +68,7 @@ Struktur repo:
 │   └── test/                               # unit + integration test
 ├── frontend/
 │   ├── src/styles/tokens.css, base.css     # design tokens monokrom hangat
-│   ├── src/components/                     # ReportBuilder, PivotToolbar, FieldSelect, FilterBuilder,
+│   ├── src/components/                     # ReportBuilder, PivotToolbar, DropdownSelect, FilterBuilder,
 │   │                                       # ValueBuilder, AggregationSelect, ReportTable,
 │   │                                       # CellColorPopover, BarChart, SavedReports
 │   ├── src/composables/useReportBuilder.js
