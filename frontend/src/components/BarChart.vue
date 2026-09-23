@@ -11,6 +11,7 @@ import {
   LinearScale,
 } from 'chart.js';
 import { formatCompact } from '../utils/format.js';
+import { isCountAggregation } from '../utils/aggregation.js';
 import { resolveColor, resolveTableStyle, rowSignature } from '../utils/cellStyle.js';
 import DropdownSelect from './DropdownSelect.vue';
 
@@ -101,7 +102,7 @@ const chartData = computed(() => {
 });
 
 const isCurrentCount = computed(() => {
-  return valueColumns.value[valueIndex.value]?.aggregation === 'count';
+  return isCountAggregation(valueColumns.value[valueIndex.value]?.aggregation);
 });
 
 const chartValueOptions = computed(() =>

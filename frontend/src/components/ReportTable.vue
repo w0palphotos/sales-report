@@ -6,6 +6,7 @@ import Handsontable from 'handsontable';
 import 'handsontable/styles/handsontable.min.css';
 import 'handsontable/styles/ht-theme-main.min.css';
 import { formatRupiah } from '../utils/format.js';
+import { isCountAggregation } from '../utils/aggregation.js';
 import {
   font,
   resolveColor,
@@ -84,7 +85,7 @@ function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
   if (isValueCol && typeof value === 'number') {
     const vals = props.result?.meta?.valueColumns ?? [];
     const valIdx = vals.length ? (col - rowDimCount.value) % vals.length : 0;
-    const isCount = vals[valIdx]?.aggregation === 'count';
+    const isCount = isCountAggregation(vals[valIdx]?.aggregation);
 
     td.innerText = isCount ? value.toLocaleString('id-ID') : formatRupiah(value);
     td.style.textAlign = 'right';
@@ -579,6 +580,14 @@ watch(
   },
   { deep: true },
 );
+
+// Wrapper Handsontable hanya menyinkronkan `data` lewat referensi (array baru
+// dari hasil pivot diabaikan), jadi datanya harus dimuat ulang secara eksplisit
+// agar tabel tidak menampilkan angka dari laporan sebelumnya.
+watch(tableData, (data) => {
+  const instance = hotRef.value?.hotInstance;
+  if (instance) instance.loadData(data);
+});
 
 onMounted(() => {
   if (props.result) {
