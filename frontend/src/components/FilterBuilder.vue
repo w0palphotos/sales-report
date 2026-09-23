@@ -10,6 +10,17 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'remove']);
 
+// Label ringkas untuk operator; kalau tidak ada di sini, pakai label dari meta.
+const OPERATOR_LABELS = {
+  '=': '=',
+  '!=': '≠',
+  '>': '>',
+  '<': '<',
+  '>=': '≥',
+  '<=': '≤',
+  contains: 'mengandung',
+};
+
 const toNumber = (value) =>
   value === '' || value == null || Number.isNaN(Number(value)) ? '' : Number(value);
 
@@ -34,12 +45,31 @@ const fieldOptions = computed(() => [
   })),
 ]);
 
+// Operator satu argumen saja yang dipakai UI; 'between' butuh dua nilai.
+const operatorOptions = computed(() =>
+  (props.meta?.operators ?? [])
+    .filter((operator) => operator.argCount === 1)
+    .map((operator) => ({
+      value: operator.key,
+      label: OPERATOR_LABELS[operator.key] ?? operator.label,
+    })),
+);
+
+const operator = computed(() => props.filter.operator ?? '=');
+
+// Nilai yang sudah dikenal hanya relevan untuk perbandingan sama/tidak sama.
+const usesValueList = computed(
+  () =>
+    field.value?.type === 'text' &&
+    (operator.value === '=' || operator.value === '!=') &&
+    fieldValues.value.length > 0,
+);
+
 const valueOptions = computed(() =>
   fieldValues.value.map((value) => ({ value, label: value })),
 );
 
-// Operator implisit '=' untuk semua filter; tidak ada lagi dropdown operator.
-// Peninggalan 'between' (value array) dinormalisasi ke nilai tunggal.
+// Operator implisit '=' untuk filter tanpa operator (laporan lama).
 const singleValue = computed(() =>
   Array.isArray(props.filter.value) ? (props.filter.value[0] ?? '') : props.filter.value,
 );
@@ -64,7 +94,15 @@ function onFieldChange(value) {
     />
 
     <DropdownSelect
-      v-if="field?.type === 'text' && fieldValues.length > 0"
+      :model-value="operator"
+      :options="operatorOptions"
+      placeholder="Operator"
+      aria-label="Pilih operator filter"
+      @update:model-value="patch({ operator: $event })"
+    />
+
+    <DropdownSelect
+      v-if="usesValueList"
       :model-value="singleValue"
       :options="valueOptions"
       placeholder="Pilih nilai"
@@ -97,7 +135,7 @@ function onFieldChange(value) {
 <style scoped>
 .filter-row {
   display: grid;
-  grid-template-columns: 1fr 1.2fr auto;
+  grid-template-columns: 1fr auto 1.2fr auto;
   gap: 8px;
   align-items: end;
 }

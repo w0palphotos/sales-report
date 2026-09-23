@@ -28,14 +28,8 @@ function onFieldChange(newFieldKey) {
     emit('remove');
     return;
   }
-  const targetField = (props.meta?.measures ?? []).find((m) => m.key === newFieldKey);
-  const isText = targetField?.type === 'text';
-
-  if (isText && props.value.aggregation !== 'count') {
-    patch({ field: newFieldKey, aggregation: 'count' });
-  } else {
-    patch({ field: newFieldKey });
-  }
+  // Agregasi menyesuaikan tipe field baru di useReportBuilder.updateValue().
+  patch({ field: newFieldKey });
 }
 </script>
 
@@ -53,7 +47,6 @@ function onFieldChange(newFieldKey) {
       :model-value="value.aggregation"
       :aggregations="meta?.aggregations ?? []"
       :field-type="currentField?.type ?? 'number'"
-      :field-label="currentField?.label ?? ''"
       @update:model-value="patch({ aggregation: $event })"
     />
 

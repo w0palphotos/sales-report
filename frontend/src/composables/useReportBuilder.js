@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { buildXlsxBuffer } from '../utils/xlsxExport.js';
 import { tableStylesToMap, styleKey } from '../utils/cellStyle.js';
 import { presetOwnedKeys, normalizePreset } from '../utils/tablePresets.js';
+import { defaultAggregationFor, isAggregationAllowed } from '../utils/aggregation.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? {}));
 
@@ -25,14 +26,15 @@ function toColorMap(list) {
 function normalizeSavedConfig(rawConfig, metaData) {
   const config = rawConfig ?? {};
 
-  // Pastikan agregasi valid untuk tipe datanya
+  // Pastikan agregasi valid untuk tipe datanya: kalau tidak, pakai default tipe itu
+  // (angka -> Total, teks -> Jumlah).
+  const aggregations = metaData?.aggregations ?? [];
   const values = (config.values ?? []).map((v) => {
     const measure = (metaData?.measures ?? []).find((m) => m.key === v.field);
-    const agg = (metaData?.aggregations ?? []).find((a) => a.key === v.aggregation);
 
     let aggregation = v.aggregation;
-    if (measure && agg && agg.allowedTypes && !agg.allowedTypes.includes(measure.type)) {
-      aggregation = measure.type === 'text' ? 'count' : 'sum';
+    if (measure && !isAggregationAllowed(aggregations, aggregation, measure.type)) {
+      aggregation = defaultAggregationFor(aggregations, measure.type);
     }
     return { field: v.field, aggregation };
   });
@@ -41,9 +43,10 @@ function normalizeSavedConfig(rawConfig, metaData) {
     rows: config.rows ?? [],
     columns: config.columns ?? [],
     values: values,
-    // Laporan lama: buang operator, satukan nilai 'between'.
+    // Laporan lama tanpa operator dianggap '='; nilai 'between' (array) disatukan.
     filters: (config.filters ?? []).map((filter) => ({
       field: filter.field ?? '',
+      operator: filter.operator ?? '=',
       value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : (filter.value ?? ''),
     })),
     colors:
@@ -85,8 +88,7 @@ export function useReportBuilder() {
     (meta.value?.dimensions ?? []).filter((dimension) => !usedRowFields.value.has(dimension.key)),
   );
 
-  // Operator implisit '=': UI tidak lagi menampilkan pilihan operator,
-  // tapi payload tetap menyertakannya agar validasi backend lolos apa adanya.
+  // Operator filter dikirim apa adanya (default '=').
   const configToPayload = () => ({
     rows: [...config.rows],
     columns: [...config.columns],
@@ -95,7 +97,7 @@ export function useReportBuilder() {
       .filter((filter) => filter.field && hasValidValue(filter))
       .map((filter) => ({
         field: filter.field,
-        operator: '=',
+        operator: filter.operator ?? '=',
         value: Array.isArray(filter.value) ? (filter.value[0] ?? '') : filter.value,
       })),
     colors: clone(config.colors),
@@ -225,26 +227,25 @@ export function useReportBuilder() {
     if (config.values.length >= MAX_VALUES) return;
     const measure = meta.value?.measures?.[0];
     const field = measure?.key || 'amount';
-    const type = measure?.type || 'number';
-    const aggregation = type === 'text' ? 'count' : 'sum';
+    const aggregation = defaultAggregationFor(meta.value?.aggregations ?? [], measure?.type || 'number');
     // avoid duplicate same field+aggregation
     if (config.values.some((v) => v.field === field && v.aggregation === aggregation)) return;
     config.values.push({ field, aggregation });
   }
 
+  // Saat field nilai diganti, agregasi lama dipakai lagi hanya bila masih masuk akal
+  // untuk tipe field baru; kalau tidak, pakai default tipe itu.
   function updateValue(index, patch) {
     const item = config.values[index];
     if (patch.field && patch.field !== item.field) {
-      const targetField = (meta.value?.measures ?? []).find((m) => m.key === patch.field);
-      const isText = targetField?.type === 'text';
-      if (isText) {
-        patch.aggregation = 'count';
-      }
-      // if switching field causes aggregation to be incompatible, fix it
-      const aggDef = meta.value?.aggregations?.find((a) => a.key === (patch.aggregation ?? item.aggregation));
-      if (aggDef && aggDef.allowedTypes && !aggDef.allowedTypes.includes(targetField?.type)) {
-        patch.aggregation = targetField?.type === 'text' ? 'count' : 'sum';
-      }
+      const aggregations = meta.value?.aggregations ?? [];
+      const target = (meta.value?.measures ?? []).find((m) => m.key === patch.field);
+      const current = patch.aggregation ?? item.aggregation;
+      const stillUsable =
+        aggregations.find((agg) => agg.key === current)?.hidden !== true &&
+        isAggregationAllowed(aggregations, current, target?.type);
+
+      if (!stillUsable) patch.aggregation = defaultAggregationFor(aggregations, target?.type);
     }
     Object.assign(item, patch);
   }
@@ -254,7 +255,7 @@ export function useReportBuilder() {
   }
 
   function addFilter() {
-    config.filters.push({ field: '', value: '' });
+    config.filters.push({ field: '', operator: '=', value: '' });
   }
 
   function updateFilter(index, patch) {
