@@ -9,3 +9,4 @@ dist/
 md/
 *.csv
 .omo
+.commandcode/
