@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import routes from './routes/index.js';
+import { corsPolicy } from './middleware/cors.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,19 +83,20 @@ function createSwaggerRouter() {
   return router;
 }
 
-export function createApp() {
+const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY ?? 1);
+const parsedBodyLimit = process.env.JSON_BODY_LIMIT ?? '2mb';
+
+export function createApp({ rateLimit: rateLimitOptions, allowedOrigins } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Di belakang proxy (Vercel) IP asli ada di X-Forwarded-For, jadi pembatas
+  // permintaan bisa membedakan tiap klien.
+  app.set('trust proxy', Number.isFinite(TRUST_PROXY_HOPS) ? TRUST_PROXY_HOPS : 1);
 
-  app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-  });
+  app.use(corsPolicy({ allowedOrigins }));
+  app.use(rateLimit(rateLimitOptions));
+  app.use(express.json({ limit: parsedBodyLimit }));
 
-  app.use(express.json({ limit: '10mb' }));
   app.use('/api/docs', createSwaggerRouter());
   app.use('/api', routes);
   app.use(errorHandler);
