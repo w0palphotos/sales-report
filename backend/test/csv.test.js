@@ -2,10 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { PivotEngine } from '../src/core/PivotEngine.js';
 import { CsvFormatter } from '../src/core/CsvFormatter.js';
-import { ReportSchema } from '../src/core/ReportSchema.js';
-import { TRANSACTIONS, buildDbRows } from './helpers.js';
+import { TRANSACTIONS, buildDbRows, buildTestSchema } from './helpers.js';
 
-const schema = new ReportSchema();
+const schema = buildTestSchema();
 const engine = new PivotEngine(schema);
 
 const render = (config, transactions = TRANSACTIONS) =>

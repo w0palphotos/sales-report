@@ -1,3 +1,8 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ReportSchema } from '../src/core/ReportSchema.js';
+
 export const TRANSACTIONS = [
   { sales_name: 'Andi', city: 'Jakarta', product: 'Honda', amount: 120_000_000 },
   { sales_name: 'Andi', city: 'Bandung', product: 'Yamaha', amount: 90_000_000 },
@@ -10,14 +15,27 @@ export const TRANSACTIONS = [
 
 const round2 = (value) => (Number.isInteger(value) ? value : Math.round(value * 100) / 100);
 
+// Meniru agregasi SQL di QueryBuilder dari daftar transaksi (setelah filter).
 function aggregate(list, value) {
-  if (value.aggregation === 'sum') {
-    return round2(list.reduce((acc, t) => acc + t.amount, 0));
+  const numbers = list.map((t) => Number(t[value.field]));
+  const total = numbers.reduce((acc, n) => acc + n, 0);
+
+  switch (value.aggregation) {
+    case 'sum':
+      return round2(total);
+    case 'avg':
+      return round2(total / list.length);
+    case 'min':
+      return round2(Math.min(...numbers));
+    case 'max':
+      return round2(Math.max(...numbers));
+    case 'count':
+      return list.length;
+    case 'count_unique':
+      return new Set(list.map((t) => t[value.field])).size;
+    default:
+      throw new Error(`Agregasi belum disimulasikan di fixture tes: ${value.aggregation}`);
   }
-  if (value.aggregation === 'avg') {
-    return round2(list.reduce((acc, t) => acc + t.amount, 0) / list.length);
-  }
-  return list.length;
 }
 
 /**
@@ -89,4 +107,51 @@ export function buildDbRows(transactions, config) {
   out.push(grand);
 
   return out;
+}
+
+// Katalog field fixture. Di produksi isinya dibaca dari tabel `field_catalog`,
+// di tes cukup data ini supaya mesin pivot bisa diuji tanpa database.
+const FIELD_CATALOG = [
+  { source_column: 'salesperson_id', field_key: 'sales_name', label: 'Nama Sales', reference_column: 'name' },
+  { source_column: 'city_id', field_key: 'city', label: 'Kota', reference_column: 'name' },
+  { source_column: 'product_id', field_key: 'product', label: 'Produk', reference_column: 'name' },
+  { source_column: 'amount', field_key: 'amount', label: 'Penjualan', reference_column: null },
+];
+
+const FOREIGN_KEYS = [
+  { column_name: 'salesperson_id', foreign_table: 'salespeople' },
+  { column_name: 'city_id', foreign_table: 'cities' },
+  { column_name: 'product_id', foreign_table: 'products' },
+];
+
+const SOURCE_COLUMNS = [
+  { column_name: 'id', data_type: 'bigint' },
+  { column_name: 'salesperson_id', data_type: 'integer' },
+  { column_name: 'city_id', data_type: 'integer' },
+  { column_name: 'product_id', data_type: 'integer' },
+  { column_name: 'amount', data_type: 'numeric' },
+  { column_name: 'created_at', data_type: 'timestamp with time zone' },
+];
+
+// Hasil introspeksi fixture: dipakai buildTestSchema() dan tes yang perlu
+// menyuntikkan katalog field ke schema milik aplikasi (tanpa database).
+export const TEST_INTROSPECTION = {
+  foreignKeys: FOREIGN_KEYS,
+  columns: SOURCE_COLUMNS,
+  catalog: FIELD_CATALOG,
+};
+
+export function buildTestSchema() {
+  const schema = new ReportSchema();
+  schema.loadFromIntrospection(TEST_INTROSPECTION);
+  return schema;
+}
+
+// Menerapkan seluruh file migrasi (urut nama) ke database tes.
+export async function applyMigrations(db) {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'db', 'migrations');
+  const files = (await readdir(dir)).filter((file) => file.endsWith('.sql')).sort();
+  for (const file of files) {
+    await db.exec(await readFile(join(dir, file), 'utf8'));
+  }
 }

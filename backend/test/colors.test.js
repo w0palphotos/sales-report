@@ -1,20 +1,16 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { ReportSchema } from '../src/core/ReportSchema.js';
+import { applyMigrations, buildTestSchema } from './helpers.js';
 import {
   validateColorRules,
   listCategoryColors,
   replaceCategoryColors,
 } from '../src/services/reportService.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
-
 describe('validateColorRules (tanpa database)', () => {
-  const schema = new ReportSchema(null);
+  const schema = buildTestSchema();
 
   it('menerima aturan valid dan menormalisasi warna teks default', () => {
     const rules = validateColorRules(
@@ -69,9 +65,7 @@ describe('category_colors dengan PGlite', () => {
 
   before(async () => {
     db = new PGlite();
-    for (const file of ['001_init.sql', '002_category_colors.sql']) {
-      await db.exec(await readFile(join(here, '..', 'db', 'migrations', file), 'utf8'));
-    }
+    await applyMigrations(db);
     schema = new ReportSchema(db);
     await schema.loadFromDatabase();
   });

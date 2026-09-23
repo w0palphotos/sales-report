@@ -2,8 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { QueryBuilder, ValidationError } from '../src/core/QueryBuilder.js';
 import { ReportSchema } from '../src/core/ReportSchema.js';
+import { buildTestSchema } from './helpers.js';
 
-const schema = new ReportSchema();
+const schema = buildTestSchema();
 const queryBuilder = new QueryBuilder(schema);
 
 const validateConfig = (config) => queryBuilder.validateConfig(config);
@@ -175,5 +176,86 @@ describe('buildReportQuery', () => {
     assert.match(sql, /SELECT s\.amount AS "_r0", COUNT\(salespeople\.name\) AS "_v0"/);
     assert.match(sql, /JOIN salespeople ON s\.salesperson_id = salespeople\.id/);
     assert.match(sql, /GROUP BY GROUPING SETS \(\(s\.amount\), \(\)\)/);
+  });
+
+  it('membangun COUNT(DISTINCT kolom) untuk agregasi jumlah unik', () => {
+    const { sql } = buildReportQuery({
+      rows: ['sales_name'],
+      columns: [],
+      values: [{ field: 'city', aggregation: 'count_unique' }],
+    });
+    assert.match(sql, /COUNT\(DISTINCT cities\.name\) AS "_v0"/);
+  });
+
+  it('membangun filter "!=" sebagai <>', () => {
+    const { sql, params } = buildReportQuery({
+      rows: ['product'],
+      columns: [],
+      values: [SUM_AMOUNT],
+      filters: [{ field: 'sales_name', operator: '!=', value: 'Andi' }],
+    });
+    assert.match(sql, /WHERE salespeople\.name <> \$1/);
+    assert.deepEqual(params, ['Andi']);
+  });
+});
+
+describe('definisi agregasi', () => {
+  it('menandai default per tipe field dan agregasi yang disembunyikan dari UI', () => {
+    assert.deepEqual(schema.getAggregation('sum').defaultFor, ['number']);
+    assert.equal(schema.getAggregation('count_unique').hidden, true);
+    assert.deepEqual(schema.getAggregation('count_unique').defaultFor, ['text']);
+    assert.equal(schema.getAggregation('count').hidden, true);
+  });
+
+  it('tetap menerima agregasi count walau tidak ditawarkan di UI', () => {
+    assert.doesNotThrow(() =>
+      validateConfig({ rows: ['product'], columns: [], values: [{ field: 'amount', aggregation: 'count' }] }),
+    );
+  });
+});
+
+describe('loadFromIntrospection', () => {
+  it('memakai key/label turunan bila katalog tidak punya barisnya', () => {
+    const plain = new ReportSchema();
+    plain.loadFromIntrospection({
+      foreignKeys: [{ column_name: 'salesperson_id', foreign_table: 'salespeople' }],
+      columns: [
+        { column_name: 'id', data_type: 'bigint' },
+        { column_name: 'created_at', data_type: 'timestamp with time zone' },
+        { column_name: 'amount', data_type: 'numeric' },
+      ],
+    });
+
+    const salesperson = plain.getDimension('salesperson');
+    assert.equal(salesperson.label, 'Salesperson');
+    assert.equal(salesperson.table, 'salespeople');
+    assert.equal(salesperson.foreignKey, 'salesperson_id');
+    assert.equal(plain.getMeasure('salesperson').column, 'salespeople.name');
+
+    assert.equal(plain.getDimension('amount').label, 'Amount');
+    assert.equal(plain.getDimension('amount').type, 'number');
+    assert.equal(plain.getDimension('id'), undefined);
+    assert.equal(plain.getDimension('created_at'), undefined);
+  });
+
+  it('memakai field_key, label, dan reference_column dari katalog', () => {
+    const plain = new ReportSchema();
+    plain.loadFromIntrospection({
+      foreignKeys: [{ column_name: 'vendor_id', foreign_table: 'vendors' }],
+      columns: [{ column_name: 'vendor_id', data_type: 'integer' }],
+      catalog: [
+        {
+          source_column: 'vendor_id',
+          field_key: 'vendor',
+          label: 'Nama Vendor',
+          reference_column: 'display_name',
+        },
+      ],
+    });
+
+    const vendor = plain.getDimension('vendor');
+    assert.equal(vendor.label, 'Nama Vendor');
+    assert.equal(vendor.foreignKey, 'vendor_id');
+    assert.equal(plain.getMeasure('vendor').column, 'vendors.display_name');
   });
 });

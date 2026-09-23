@@ -1,10 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { PivotEngine, ALL_KEY } from '../src/core/PivotEngine.js';
-import { ReportSchema } from '../src/core/ReportSchema.js';
-import { TRANSACTIONS, buildDbRows } from './helpers.js';
+import { TRANSACTIONS, buildDbRows, buildTestSchema } from './helpers.js';
 
-const schema = new ReportSchema();
+const schema = buildTestSchema();
 const engine = new PivotEngine(schema);
 const pivotReport = (dbRows, config) => engine.pivot(dbRows, config);
 
@@ -100,11 +99,31 @@ describe('pivotReport (cocok dengan contoh di assignment)', () => {
     const config = { rows: ['sales_name'], columns: [], values: [{ field: 'amount', aggregation: 'count' }] };
     const report = pivotReport(buildDbRows(TRANSACTIONS, config), config);
 
+    assert.deepEqual(report.meta.valueColumns, [
+      { field: 'amount', aggregation: 'count', label: 'Jumlah Transaksi' },
+    ]);
+
     const rows = byRowKey(report, 'sales_name');
     assert.strictEqual(rows.get('Andi').cells[ALL_KEY][0], 3);
     assert.strictEqual(rows.get('Budi').cells[ALL_KEY][0], 2);
     assert.strictEqual(rows.get('Citra').cells[ALL_KEY][0], 2);
     assert.deepEqual(report.grandTotal, [7]);
+  });
+
+  it('menghitung nilai unik pada kolom yang dipilih (COUNT DISTINCT)', () => {
+    const config = { rows: ['sales_name'], columns: [], values: [{ field: 'city', aggregation: 'count_unique' }] };
+    const report = pivotReport(buildDbRows(TRANSACTIONS, config), config);
+
+    assert.deepEqual(report.meta.valueColumns, [
+      { field: 'city', aggregation: 'count_unique', label: 'Jumlah Kota' },
+    ]);
+
+    const rows = byRowKey(report, 'sales_name');
+    // Andi–Jakarta tercatat dua baris (produk berbeda) tetapi kotanya tetap dua.
+    assert.strictEqual(rows.get('Andi').cells[ALL_KEY][0], 2);
+    assert.strictEqual(rows.get('Budi').cells[ALL_KEY][0], 2);
+    assert.strictEqual(rows.get('Citra').cells[ALL_KEY][0], 2);
+    assert.deepEqual(report.grandTotal, [3]);
   });
 
   it('mendukung beberapa field baris sekaligus', () => {

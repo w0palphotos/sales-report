@@ -7,6 +7,14 @@ const round2 = (value) => {
   return Number.isInteger(number) ? number : Math.round(number * 100) / 100;
 };
 
+// Judul kolom nilai diambil dari definisi agregasi (satu sumber), sehingga
+// menambah agregasi baru tidak perlu mengubah mesin pivot.
+const valueColumnLabel = (schema, value, fieldLabel) => {
+  const aggregation = schema.getAggregation(value.aggregation);
+  if (aggregation?.columnLabel) return aggregation.columnLabel(fieldLabel);
+  return `${aggregation?.label ?? value.aggregation} ${fieldLabel}`;
+};
+
 export class PivotEngine {
   constructor(schema) {
     this.schema = schema;
@@ -33,10 +41,7 @@ export class PivotEngine {
       return {
         field: value.field,
         aggregation: value.aggregation,
-        label:
-          value.aggregation === 'count'
-            ? (value.field === 'amount' ? 'Jumlah Transaksi' : `Jumlah ${fieldLabel}`)
-            : `${this.schema.getAggregation(value.aggregation)?.label ?? value.aggregation} ${fieldLabel}`,
+        label: valueColumnLabel(this.schema, value, fieldLabel),
       };
     });
 

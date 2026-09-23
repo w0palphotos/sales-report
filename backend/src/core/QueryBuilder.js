@@ -1,3 +1,5 @@
+import { ROOT_ALIAS, ROOT_TABLE } from './ReportSchema.js';
+
 export class ValidationError extends Error {
   constructor(message) {
     super(message);
@@ -5,12 +7,6 @@ export class ValidationError extends Error {
     this.status = 400;
   }
 }
-
-const FK_BY_TABLE = {
-  salespeople: 'salesperson_id',
-  cities: 'city_id',
-  products: 'product_id',
-};
 
 export class QueryBuilder {
   constructor(schema) {
@@ -121,10 +117,12 @@ export class QueryBuilder {
     const { rows = [], columns = [], values = [], filters = [] } = config;
 
     const params = [];
-    const joins = new Set();
+    // Tabel relasi yang perlu di-JOIN, dipetakan ke kolom foreign key-nya
+    // di tabel sumber (keduanya dibaca dari metadata schema).
+    const joins = new Map();
     const wantJoin = (field) => {
-      const table = this.schema.getDimension(field)?.table;
-      if (table) joins.add(table);
+      const dimension = this.schema.getDimension(field);
+      if (dimension?.table) joins.set(dimension.table, dimension.foreignKey);
     };
 
     rows.forEach(wantJoin);
@@ -132,7 +130,9 @@ export class QueryBuilder {
     values.forEach((v) => wantJoin(v.field));
     filters.forEach((filter) => wantJoin(filter.field));
 
-    const joinsSql = [...joins].map((table) => `JOIN ${table} ON s.${FK_BY_TABLE[table]} = ${table}.id`);
+    const joinsSql = [...joins].map(
+      ([table, foreignKey]) => `JOIN ${table} ON ${ROOT_ALIAS}.${foreignKey} = ${table}.id`,
+    );
 
     const select = [
       ...rows.map((key, i) => `${this.schema.getDimensionColumn(key)} AS "_r${i}"`),
@@ -189,7 +189,7 @@ export class QueryBuilder {
 
     const sql = [
       `SELECT ${select.join(', ')}`,
-      'FROM sales s',
+      `FROM ${ROOT_TABLE} ${ROOT_ALIAS}`,
       ...joinsSql,
       where.length ? `WHERE ${where.join(' AND ')}` : '',
       `GROUP BY GROUPING SETS (${groupingSets.join(', ')})`,

@@ -1,16 +1,12 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { QueryBuilder } from '../src/core/QueryBuilder.js';
 import { PivotEngine } from '../src/core/PivotEngine.js';
 import { CsvFormatter } from '../src/core/CsvFormatter.js';
 import { ReportSchema } from '../src/core/ReportSchema.js';
-import { TRANSACTIONS } from './helpers.js';
+import { TRANSACTIONS, applyMigrations } from './helpers.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
 let db;
 let schema;
 let queryBuilder;
@@ -18,9 +14,7 @@ let pivotEngine;
 
 before(async () => {
   db = new PGlite();
-
-  const migration = await readFile(join(here, '..', 'db', 'migrations', '001_init.sql'), 'utf8');
-  await db.exec(migration);
+  await applyMigrations(db);
 
   schema = new ReportSchema(db);
   await schema.loadFromDatabase();
@@ -167,5 +161,46 @@ describe('integration: migration + query dinamis + pivot (PostgreSQL sesungguhny
     const csv = buildCsv(report);
     assert.ok(csv.includes('Jakarta,275000000'));
     assert.ok(csv.includes('Total,615000000'));
+  });
+
+  it('katalog field dibaca dari tabel field_catalog', () => {
+    const salesperson = schema.getDimension('sales_name');
+    assert.equal(salesperson.label, 'Nama Sales');
+    assert.equal(salesperson.table, 'salespeople');
+    assert.equal(salesperson.foreignKey, 'salesperson_id');
+
+    assert.equal(schema.getDimension('amount').label, 'Penjualan');
+    assert.equal(schema.getDimension('amount').type, 'number');
+    // Kolom pembukuan tidak ikut menjadi field laporan.
+    assert.equal(schema.getDimension('created_at'), undefined);
+  });
+
+  it('COUNT DISTINCT (Jumlah) menghitung nilai unik per grup', async () => {
+    const report = await runReport({
+      rows: ['sales_name'],
+      columns: [],
+      values: [{ field: 'city', aggregation: 'count_unique' }],
+    });
+
+    const rows = byRowKey(report, 'sales_name');
+    assert.strictEqual(rows.get('Andi').cells.__all__[0], 2);
+    assert.strictEqual(rows.get('Budi').cells.__all__[0], 2);
+    assert.strictEqual(rows.get('Citra').cells.__all__[0], 2);
+    assert.deepEqual(report.grandTotal, [3]);
+  });
+
+  it('filter "!=" mengecualikan nilai', async () => {
+    const report = await runReport({
+      rows: ['product'],
+      columns: [],
+      values: [{ field: 'amount', aggregation: 'sum' }],
+      filters: [{ field: 'sales_name', operator: '!=', value: 'Andi' }],
+    });
+
+    const rows = byRowKey(report, 'product');
+    assert.strictEqual(rows.get('Honda').cells.__all__[0], 95_000_000);
+    assert.strictEqual(rows.get('Suzuki').cells.__all__[0], 150_000_000);
+    // Yamaha: 85jt milik Citra; 90jt milik Andi ikut dikecualikan.
+    assert.strictEqual(rows.get('Yamaha').cells.__all__[0], 85_000_000);
   });
 });

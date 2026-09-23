@@ -1,5 +1,5 @@
 import { pool } from '../config/db.js';
-import { ReportSchema } from '../core/ReportSchema.js';
+import { ReportSchema, ROOT_ALIAS, ROOT_TABLE } from '../core/ReportSchema.js';
 import { QueryBuilder, ValidationError } from '../core/QueryBuilder.js';
 import { PivotEngine } from '../core/PivotEngine.js';
 import { CsvFormatter } from '../core/CsvFormatter.js';
@@ -45,29 +45,41 @@ export async function exportCsv(config) {
   return CsvFormatter.format(report);
 }
 
-const DIMENSION_QUERY = {
-  sales_name: 'SELECT name FROM salespeople ORDER BY name',
-  city: 'SELECT name FROM cities ORDER BY name',
-  product: 'SELECT name FROM products ORDER BY name',
-  amount: 'SELECT DISTINCT amount::text AS name FROM sales ORDER BY amount',
-};
+// Nilai untuk dropdown filter hanya relevan untuk dimensi teks; query-nya
+// dibangun dari metadata schema (bukan daftar field hard-code) sehingga ikut
+// dataset apa pun. Nama tabel/kolom berasal dari introspeksi, bukan input user.
+function dimensionValuesSql(dimension) {
+  if (dimension.type !== 'text') return null;
+
+  const column = dimension.getColumnSql();
+  const from = dimension.table ? dimension.table : `${ROOT_TABLE} ${ROOT_ALIAS}`;
+  return `SELECT DISTINCT ${column} AS name FROM ${from} ORDER BY name`;
+}
+
+// Dijalankan paralel: dulu satu query per dimensi secara berurutan.
+async function fetchDimensionValues() {
+  const entries = await Promise.all(
+    [...reportSchema.dimensions.entries()].map(async ([key, dimension]) => {
+      const sql = dimensionValuesSql(dimension);
+      if (!sql) return [key, []];
+
+      try {
+        const result = await pool.query(sql);
+        return [key, result.rows.map((row) => row.name)];
+      } catch (err) {
+        console.warn(`[meta] gagal memuat nilai dimensi ${key}:`, err.message);
+        return [key, []];
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries);
+}
 
 export async function getMeta() {
   await reportSchema.loadFromDatabase();
 
-  const values = {};
-  for (const [key] of reportSchema.dimensions.entries()) {
-    if (DIMENSION_QUERY[key]) {
-      try {
-        const result = await pool.query(DIMENSION_QUERY[key]);
-        values[key] = result.rows.map((row) => row.name);
-      } catch {
-        values[key] = [];
-      }
-    } else {
-      values[key] = [];
-    }
-  }
+  const values = await fetchDimensionValues();
 
   return {
     dimensions: Array.from(reportSchema.dimensions.entries()).map(([key, dim]) => ({
@@ -85,6 +97,9 @@ export async function getMeta() {
       key,
       label: aggregation.label,
       allowedTypes: aggregation.allowedTypes,
+      // Agregasi tersembunyi dipakai sebagai default, tidak ditawarkan di UI.
+      hidden: Boolean(aggregation.hidden),
+      defaultFor: aggregation.defaultFor ?? [],
     })),
     operators: Array.from(reportSchema.operators.entries()).map(([key, operator]) => ({
       key,
