@@ -258,6 +258,19 @@ export function useReportBuilder() {
     config.filters.push({ field: '', operator: '=', value: '' });
   }
 
+  // Mengisi pivot dari pertanyaan bank pertanyaan (panel People also ask):
+  // baris, nilai, dan filter diganti sekaligus agar pertanyaannya langsung terjawab.
+  function applyQuestion(question) {
+    config.rows = [...(question.rows ?? [])];
+    config.columns = [];
+    config.values = [{ field: question.field, aggregation: question.aggregation }];
+    config.filters = (question.filters ?? []).map((filter) => ({
+      field: filter.field,
+      operator: filter.operator ?? '=',
+      value: filter.value,
+    }));
+  }
+
   function updateFilter(index, patch) {
     Object.assign(config.filters[index], patch);
   }
@@ -440,6 +453,7 @@ export function useReportBuilder() {
     addFilter,
     updateFilter,
     removeFilter,
+    applyQuestion,
     saveReport,
     loadReport,
     deleteSaved,

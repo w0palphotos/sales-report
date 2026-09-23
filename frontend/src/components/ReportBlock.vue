@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import PivotToolbar from './PivotToolbar.vue';
 import FilterDrawer from './FilterDrawer.vue';
+import QuestionBank from './QuestionBank.vue';
 import CellColorPopover from './CellColorPopover.vue';
 import TablePresetPopover from './TablePresetPopover.vue';
 import SaveDrawer from './SaveDrawer.vue';
@@ -235,6 +236,8 @@ function blockTableStyles() {
       @toggle-save="showSaveModal = !showSaveModal"
       @reset="builder.reset"
     />
+
+    <QuestionBank @apply="builder.applyQuestion" />
 
     <FilterDrawer
       v-if="showFilters || builder.config.filters.length > 0"

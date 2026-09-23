@@ -12,6 +12,9 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   allowClear: { type: Boolean, default: false },
   ariaLabel: { type: String, default: '' },
+  // Label cadangan bila nilai terpilih tidak ada di daftar opsi (mis. agregasi
+  // tersembunyi yang dipakai sebagai default).
+  displayLabel: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -37,7 +40,7 @@ const selectedIndex = computed(() =>
 );
 
 const currentLabel = computed(
-  () => items.value[selectedIndex.value]?.label ?? props.placeholder,
+  () => items.value[selectedIndex.value]?.label ?? props.displayLabel ?? props.placeholder,
 );
 
 function isSelected(item) {
