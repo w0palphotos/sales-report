@@ -45,9 +45,11 @@ function snapshotBlocks(blocks) {
   }));
 }
 
-function persistBlocks(blocks) {
+const PERSIST_DEBOUNCE_MS = 300;
+
+function persistSnapshot(json) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotBlocks(blocks)));
+    localStorage.setItem(STORAGE_KEY, json);
   } catch {
     // penyimpanan penuh/nonaktif: dashboard tetap jalan sesi ini
   }
@@ -151,8 +153,13 @@ export function useDashboard() {
       blocks.value.push(block);
     }
 
-    // Simpan susunan setiap ada perubahan konfigurasi blok.
-    watch(persistenceKey, () => persistBlocks(blocks.value));
+    // Simpan susunan setiap ada perubahan konfigurasi blok, tapi ditunda
+    // sebentar supaya mengetik di filter tidak menulis localStorage tiap ketikan.
+    let persistTimer;
+    watch(persistenceKey, (json) => {
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => persistSnapshot(json), PERSIST_DEBOUNCE_MS);
+    });
   }
 
   const canAdd = computed(() => blocks.value.length < MAX_BLOCKS);
