@@ -32,7 +32,7 @@ node --test test/security   # hanya suite keamanan
 | Kontrol | Default | Diatur lewat |
 | --- | --- | --- |
 | Pembatas permintaan (sliding window per IP) → `429` + `Retry-After` | 120 permintaan / 60 detik | `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS` |
-| CORS allowlist (tidak ada header bila kosong) | kosong = same-origin saja | `ALLOWED_ORIGINS` |
+| CORS allowlist (tidak ada header bila kosong) | kosong = same-origin saja | `ALLOWED_ORIGINS`; mendukung pola wildcard (`https://app-*.vercel.app`) untuk preview deployment |
 | Batas ukuran body JSON → `413` | `2mb` | `JSON_BODY_LIMIT` |
 | Batas baris per unggahan → `400` | 1000 baris | `MAX_BULK_ROWS` |
 | Batas baris respons `GET /api/sales` | 5000 baris | `MAX_SALES_ROWS` |
@@ -49,7 +49,7 @@ transaksinya, sehingga jumlah query tidak lagi tumbuh mengikuti jumlah baris.
 | --- | --- |
 | `test/security/sqlInjection.test.js` | 11 payload injeksi (kutip, `OR 1=1`, `DROP TABLE`, `COPY … PROGRAM`, `UNION SELECT`, dsb.) pada semua input: nilai filter (`=`, `contains`, angka), nama field/kolom, agregasi, operator. Memastikan payload selalu jadi parameter dan tidak pernah muncul di teks SQL, serta tidak ada statement/komentar tambahan. Termasuk penolakan `__proto__`/`constructor`. |
 | `test/security/rateLimit.test.js` | Batas terlampaui → `429` + `Retry-After`, perhitungan per IP, berlaku juga di endpoint data. |
-| `test/security/apiHardening.test.js` | CORS (same-origin, origin asing, preflight, origin terdaftar), body 3 MB → `413`, batas `rows`/`values`, id laporan non-integer → `400`, `x-powered-by` tidak ada, error 5xx tidak membocorkan detail, response yang sudah terkirim tidak ditulis ulang, dan `Object.prototype` tidak bisa dicemari lewat body JSON. |
+| `test/security/apiHardening.test.js` | CORS (same-origin, origin asing, preflight, origin terdaftar, wildcard preview), body 3 MB → `413`, batas `rows`/`values`, id laporan non-integer → `400`, `x-powered-by` tidak ada, error 5xx tidak membocorkan detail, response yang sudah terkirim tidak ditulis ulang, dan `Object.prototype` tidak bisa dicemari lewat body JSON. |
 | `test/security/inputValidation.test.js` | Validasi transaksi: field wajib, `amount` (negatif/NaN/overflow), panjang nama, batas 1000 baris, tidak ada baris tersisip saat input ditolak, dan nama berisi kutip disimpan sebagai data biasa (tabel `sales` tetap utuh). |
 | `test/security/rls.test.js` | RLS aktif di 8 tabel, tanpa `FORCE ROW LEVEL SECURITY` (pemilik tetap bisa akses), dan role non-pemilik tanpa policy melihat **0 baris**. |
 
@@ -85,3 +85,22 @@ transaksinya, sehingga jumlah query tidak lagi tumbuh mengikuti jumlah baris.
 > Catatan: jalankan `npm run db:migrate` ke database produksi sebelum backend
 > versi baru melayani permintaan, karena key field dibaca dari `field_catalog`
 > dan RLS baru aktif setelah migrasi `005`.
+
+### Deployment frontend + backend terpisah (dua project Vercel)
+
+Jika frontend dan backend dideploy sebagai dua project Vercel berbeda (mis.
+`sales-report-frontend-*.vercel.app` → `sales-report-backend-*.vercel.app`),
+frontend harus memanggil backend lewat `VITE_API_URL` lintas origin, sehingga
+**`ALLOWED_ORIGINS` wajib diisi di project backend** supaya CORS mengizinkannya:
+
+```text
+ALLOWED_ORIGINS=https://sales-report-frontend-sigma.vercel.app,https://sales-report-frontend-*.vercel.app
+```
+
+Pola wildcard (`*`) hanya mencocokkan di dalam satu label host, tidak melewati
+garis miring, sehingga domain lain tidak ikut diizinkan. Pola harus mengandung
+skema (`://`); `*` saja diabaikan.
+
+Alternatif yang tidak butuh CORS sama sekali: deploy frontend + backend sebagai
+satu project (mengikuti `vercel.json` yang sudah ada; backend jadi `api/` Vercel
+Function).

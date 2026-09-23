@@ -100,7 +100,7 @@ describe('security: batas ukuran dan validasi input', () => {
     }
   });
 
-  it('tidak bisa mencemari Object.prototype lewat body JSON', async () => {
+  it('tidak mencemari Object.prototype lewat body JSON', async () => {
     const raw = '{"rows":["city"],"columns":[],"values":[{"field":"amount","aggregation":"sum"}]}';
     const attack = `{"rows":["city"],"columns":[],"values":[{"field":"amount","aggregation":"sum"}],"__proto__":{"polluted":true}}`;
 
@@ -109,6 +109,57 @@ describe('security: batas ukuran dan validasi input', () => {
 
     assert.equal(malicious.status, normal.status, 'kunci __proto__ tidak boleh mengubah perilaku');
     assert.equal({}.polluted, undefined);
+  });
+});
+
+// --- Tes terpisah: patch wildcard untuk preview deployment Vercel ----
+
+let patternServer;
+let patternBase;
+
+before(async () => {
+  if (!patternServer) {
+    patternServer = createApp({
+      allowedOrigins: [
+        'https://app.example',
+        'https://sales-report-frontend-*.vercel.app',
+      ],
+      rateLimit: { max: 500, windowMs: 60_000 },
+    }).listen(0);
+    await new Promise((resolve) => patternServer.once('listening', resolve));
+    patternBase = `http://127.0.0.1:${patternServer.address().port}`;
+  }
+});
+
+after(async () => {
+  if (patternServer) {
+    await new Promise((resolve) => patternServer.close(resolve));
+    patternServer = null;
+  }
+});
+
+describe('security: CORS mendukung wildcard untuk preview', () => {
+  it('origin yang cocok dengan pola diizinkan', async () => {
+    const res = await fetch(`${patternBase}/api/health`, {
+      headers: { Origin: 'https://sales-report-frontend-git-main-abc123.vercel.app' },
+    });
+    assert.equal(
+      res.headers.get('access-control-allow-origin'),
+      'https://sales-report-frontend-git-main-abc123.vercel.app',
+    );
+  });
+
+  it('pola tidak bocor ke host lain atau melewati garis miring', async () => {
+    const blocked = [
+      'https://evil.vercel.app',
+      'https://sales-report-frontend-x.evil.com',
+      'https://sales-report-frontend-x/.vercel.app',
+    ];
+
+    for (const origin of blocked) {
+      const res = await fetch(`${patternBase}/api/health`, { headers: { Origin: origin } });
+      assert.equal(res.headers.get('access-control-allow-origin'), null, `tidak seharusnya diizinkan: ${origin}`);
+    }
   });
 });
 
