@@ -82,12 +82,15 @@ function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
     ? TOTAL_KEY
     : rowSignature(dataRow.key, props.result?.meta?.rowFields ?? []);
 
-  if (isValueCol && typeof value === 'number') {
+  const numValue = Number(value);
+  const isValidNumber = value !== null && value !== '' && !isNaN(numValue);
+
+  if (isValueCol && isValidNumber) {
     const vals = props.result?.meta?.valueColumns ?? [];
     const valIdx = vals.length ? (col - rowDimCount.value) % vals.length : 0;
     const isCount = isCountAggregation(vals[valIdx]?.aggregation);
 
-    td.innerText = isCount ? value.toLocaleString('id-ID') : formatRupiah(value);
+    td.innerText = isCount ? numValue.toLocaleString('id-ID') : formatRupiah(numValue);
     td.style.textAlign = 'right';
     td.style.fontVariantNumeric = 'tabular-nums';
     const style = valueCellStyle(col, physicalRow, rowSig);
@@ -102,8 +105,8 @@ function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
       const style = labelCellStyle(fieldKey, physicalRow, rowSig);
       paintCell(td, { background: style?.bg ?? null, color: style?.color ?? null });
     }
-    if (rFields[col]?.key === 'amount' && typeof value === 'number' && !isTotalRow) {
-      td.innerText = formatRupiah(value);
+    if (rFields[col]?.key === 'amount' && isValidNumber && !isTotalRow) {
+      td.innerText = formatRupiah(numValue);
       td.style.textAlign = 'right';
     } else {
       td.style.textAlign = 'left';

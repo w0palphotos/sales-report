@@ -46,11 +46,11 @@ const hotSettings = computed(() => ({
   data: tableData.value,
   colHeaders,
   columns: [
-    { type: 'numeric', width: 60 },
-    { type: 'text' },
-    { type: 'text' },
-    { type: 'text' },
-    { type: 'numeric' },
+    { width: 60 },
+    {},
+    {},
+    {},
+    {},
   ],
   readOnly: true,
   // ponytail: read-only raw sales data viewer; upgrade to inline CRUD if needed
