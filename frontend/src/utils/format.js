@@ -3,8 +3,10 @@ export function formatRupiah(value) {
   const options = Number.isInteger(number)
     ? { maximumFractionDigits: 0 }
     : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-  return `Rp${number.toLocaleString('id-ID', options)}`;
+  return number.toLocaleString('id-ID', options);
 }
+
+export const formatNumber = formatRupiah;
 
 export function formatCompact(value) {
   const number = Number(value) || 0;

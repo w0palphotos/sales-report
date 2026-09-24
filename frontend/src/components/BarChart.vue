@@ -122,9 +122,7 @@ const chartOptions = computed(() => ({
       callbacks: {
         label: (context) => {
           const val = Number(context.parsed.y);
-          return isCurrentCount.value
-            ? ` ${context.dataset.label}: ${val.toLocaleString('id-ID')}`
-            : ` ${context.dataset.label}: Rp${val.toLocaleString('id-ID')}`;
+          return ` ${context.dataset.label}: ${val.toLocaleString('id-ID')}`;
         },
       },
     },

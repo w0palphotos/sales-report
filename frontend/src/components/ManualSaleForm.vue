@@ -81,7 +81,7 @@ const submitManual = async () => {
           <input type="text" v-model="manualForm.product_name" placeholder="Cth: Honda" />
         </div>
         <div class="form-group">
-          <label>Penjualan (Rp)</label>
+          <label>Penjualan</label>
           <input type="number" v-model="manualForm.amount" min="0" placeholder="Cth: 120000000" />
         </div>
       </div>
