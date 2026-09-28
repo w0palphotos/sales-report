@@ -143,19 +143,28 @@ export class QueryBuilder {
       ),
     ];
 
-    const groupDimensions = [
-      ...rows.map((key) => this.schema.getDimensionColumn(key)),
-      ...(columns.length ? [this.schema.getDimensionColumn(columns[0])] : []),
-    ];
+    const rowRollups = [];
+    const rowCols = rows.map((key) => this.schema.getDimensionColumn(key));
+    for (let i = rowCols.length; i >= 1; i--) {
+      rowRollups.push(rowCols.slice(0, i));
+    }
 
-    const rawSets = columns.length
-      ? [
-          `(${groupDimensions.join(', ')})`,
-          `(${rows.map((key) => this.schema.getDimensionColumn(key)).join(', ')})`,
-          `(${this.schema.getDimensionColumn(columns[0])})`,
-          '()',
-        ]
-      : [`(${rows.map((key) => this.schema.getDimensionColumn(key)).join(', ')})`, '()'];
+    const rawSets = [];
+    if (columns.length) {
+      const c = this.schema.getDimensionColumn(columns[0]);
+      for (const rr of rowRollups) {
+        rawSets.push(`(${[...rr, c].join(', ')})`);
+      }
+      for (const rr of rowRollups) {
+        rawSets.push(`(${rr.join(', ')})`);
+      }
+      rawSets.push(`(${c})`);
+    } else {
+      for (const rr of rowRollups) {
+        rawSets.push(`(${rr.join(', ')})`);
+      }
+    }
+    rawSets.push('()');
 
     const groupingSets = Array.from(new Set(rawSets.filter((s) => s !== '()')));
     groupingSets.push('()');

@@ -77,10 +77,14 @@ function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
   const isValueCol = col >= rowDimCount.value;
   const physicalRow = typeof instance.toPhysicalRow === 'function' ? instance.toPhysicalRow(row) : row;
   const dataRow = physicalRow >= 0 ? props.result?.rows?.[physicalRow] : null;
+  const rFields = props.result?.meta?.rowFields ?? [];
+  const rolledUpIndex = dataRow ? rFields.findIndex((rf) => dataRow.key?.[rf.key] == null) : -1;
+  const isSubtotalRow = rolledUpIndex >= 0;
+
   // Baris Grand Total memakai kunci sintetis agar bisa diwarnai seperti baris lain.
   const rowSig = isTotalRow || !dataRow
     ? TOTAL_KEY
-    : rowSignature(dataRow.key, props.result?.meta?.rowFields ?? []);
+    : rowSignature(dataRow.key, rFields);
 
   const numValue = Number(value);
   const isValidNumber = value !== null && value !== '' && !isNaN(numValue);
@@ -90,28 +94,68 @@ function cellRenderer(instance, td, row, col, prop, value, cellProperties) {
     const valIdx = vals.length ? (col - rowDimCount.value) % vals.length : 0;
     const isCount = isCountAggregation(vals[valIdx]?.aggregation);
 
-    td.innerText = isCount ? numValue.toLocaleString('id-ID') : formatRupiah(numValue);
+    if (numValue === 0) {
+      td.innerText = '';
+    } else {
+      td.innerText = isCount ? numValue.toLocaleString('id-ID') : formatRupiah(numValue);
+    }
     td.style.textAlign = 'right';
     td.style.fontVariantNumeric = 'tabular-nums';
     const style = valueCellStyle(col, physicalRow, rowSig);
-    paintCell(td, { background: style?.bg ?? null, color: style?.color ?? null });
+    let bg = style?.bg ?? null;
+    if (isSubtotalRow && !isTotalRow && !bg) bg = '#f3f4f6';
+    if (isSubtotalRow && !isTotalRow) td.style.fontWeight = '700';
+    paintCell(td, { background: bg, color: style?.color ?? null });
   } else if (!isValueCol) {
-    const rFields = props.result?.meta?.rowFields ?? [];
     const fieldKey = rFields[col]?.key;
-    const rule = fieldKey ? resolveColor(fieldKey, value, colorsCtx.value) : null;
+    const rule = fieldKey && value ? resolveColor(fieldKey, value, colorsCtx.value) : null;
+    let bgToPaint = null;
+    let colorToPaint = null;
+
     if (rule) {
-      applyBuiltStyle(td, font(value).bg(rule.bg).color(rule.color ?? DEFAULT_TEXT).build());
+      bgToPaint = rule.bg;
+      colorToPaint = rule.color ?? DEFAULT_TEXT;
     } else {
       const style = labelCellStyle(fieldKey, physicalRow, rowSig);
-      paintCell(td, { background: style?.bg ?? null, color: style?.color ?? null });
+      bgToPaint = style?.bg ?? null;
+      colorToPaint = style?.color ?? null;
     }
-    if (rFields[col]?.key === 'amount' && isValidNumber && !isTotalRow) {
-      td.innerText = formatRupiah(numValue);
-      td.style.textAlign = 'right';
-    } else {
-      td.style.textAlign = 'left';
+
+    let val = value ?? '';
+    let isSubtotalLabelCell = false;
+
+    if (dataRow) {
+      if (rolledUpIndex > 0) {
+        if (col === rolledUpIndex - 1) {
+          val = `${dataRow.key?.[rFields[col].key]} Total`;
+          isSubtotalLabelCell = true;
+        } else if (col >= rolledUpIndex) {
+          val = '';
+        }
+      } else if (rolledUpIndex === -1 && physicalRow > 0) {
+        const prevDataRow = props.result?.rows?.[physicalRow - 1];
+        if (prevDataRow) {
+          let sameAsPrev = true;
+          for (let c = 0; c <= col; c++) {
+            if (dataRow.key?.[rFields[c].key] !== prevDataRow.key?.[rFields[c].key]) {
+              sameAsPrev = false;
+              break;
+            }
+          }
+          if (sameAsPrev) val = '';
+        }
+      }
     }
-    td.style.fontWeight = '500';
+
+    if (isSubtotalRow && !isTotalRow && !bgToPaint) bgToPaint = '#f3f4f6';
+
+    if (!isTotalRow) {
+      td.innerText = (rFields[col]?.key === 'amount' && isValidNumber && val !== '') ? formatRupiah(numValue) : val;
+      td.style.textAlign = (rFields[col]?.key === 'amount') ? 'right' : 'left';
+      td.style.fontWeight = isSubtotalLabelCell || isSubtotalRow ? '700' : '500';
+    }
+
+    paintCell(td, { background: bgToPaint, color: colorToPaint });
   }
 
   if (isTotalRow) {

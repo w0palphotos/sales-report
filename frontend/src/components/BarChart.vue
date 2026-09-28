@@ -40,11 +40,33 @@ const columnKeys = computed(() => props.result.columnKeys ?? []);
 const rowFields = computed(() => props.result.meta.rowFields ?? []);
 const rows = computed(() => props.result.rows ?? []);
 
+const chartRows = computed(() => {
+  const r = [...rows.value];
+  if (props.result.grandTotal) {
+    r.push({
+      key: {},
+      cells: props.result.columnTotals ?? {},
+      rowTotal: props.result.grandTotal,
+    });
+  }
+  return r;
+});
+
 const labels = computed(() =>
-  rows.value.map((row) => rowFields.value.map((field) => row.key[field.key]).join(' · ')),
+  chartRows.value.map((row) => {
+    const rFields = rowFields.value;
+    if (rFields.length === 0) return 'Grand Total';
+    if (row.key && Object.keys(row.key).length === 0) return 'Grand Total';
+
+    const rolledUpIndex = rFields.findIndex((rf) => row.key?.[rf.key] == null);
+    if (rolledUpIndex === 0) return 'Grand Total';
+    if (rolledUpIndex > 0) return `${row.key?.[rFields[rolledUpIndex - 1].key]} Total`;
+
+    return row.key?.[rFields[rFields.length - 1].key] ?? '';
+  }),
 );
 
-const palette = ['#2f3437', '#1f6c9f', '#346538', '#956400', '#9f2f2d', '#787774'];
+const palette = ['#1f6c9f', '#346538', '#956400', '#9f2f2d', '#787774', '#2f3437'];
 
 function seriesColor(columnKey, fallback) {
   if (!columnField.value) return fallback;
@@ -76,12 +98,19 @@ function barColorForRow(row, fallback) {
 const chartData = computed(() => {
   const index = valueIndex.value;
   if (columnField.value) {
+    const keys = [...columnKeys.value, 'Grand Total'];
     return {
       labels: labels.value,
-      datasets: columnKeys.value.map((columnKey, i) => ({
+      datasets: keys.map((columnKey, i) => ({
         label: columnKey,
-        data: rows.value.map((row) => row.cells[columnKey][index]),
-        backgroundColor: seriesColor(columnKey, palette[i % palette.length]),
+        data: chartRows.value.map((row) => {
+          if (columnKey === 'Grand Total') return row.rowTotal?.[index] ?? 0;
+          return row.cells?.[columnKey]?.[index] ?? 0;
+        }),
+        backgroundColor:
+          columnKey === 'Grand Total'
+            ? '#eab308'
+            : seriesColor(columnKey, palette[i % palette.length]),
         borderRadius: 2,
         maxBarThickness: 36,
       })),
@@ -92,8 +121,14 @@ const chartData = computed(() => {
     datasets: [
       {
         label: valueColumns.value[index]?.label ?? 'Nilai',
-        data: rows.value.map((row) => row.cells[ALL][index]),
-        backgroundColor: rows.value.map((row) => barColorForRow(row, palette[0])),
+        data: chartRows.value.map((row) => {
+          if (row.key && Object.keys(row.key).length === 0) return row.rowTotal?.[index] ?? 0;
+          return row.cells?.[ALL]?.[index] ?? 0;
+        }),
+        backgroundColor: chartRows.value.map((row) => {
+          if (row.key && Object.keys(row.key).length === 0) return '#eab308';
+          return barColorForRow(row, palette[0]);
+        }),
         borderRadius: 2,
         maxBarThickness: 42,
       },
